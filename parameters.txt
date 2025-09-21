@@ -1,0 +1,24 @@
+% Min joint torques
+-800, -500
+% Max joint torques
+700, 500
+
+% Path start point
+0, 0
+% Path end point
+220, 220
+
+% 2 DOF link masses
+2, 2.5
+% 2 DOF link lengths
+1, 1.5
+
+% Comparing tau values
+% Min tau 1
+-800, -500
+% Max tau 1
+500, 700
+% Min tau 2
+-8000, -5000
+% Max tau 2
+10000, 14000

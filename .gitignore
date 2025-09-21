@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/ # Your virtual environment folder
+pip-log.txt
+pip-delete-this-file.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+.nox/
+.egg-info/
+.mypy_cache/
+
+# VS Code
+.vscode/ # VS Code specific settings for this workspace
