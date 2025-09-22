@@ -86,7 +86,8 @@ class BoundarySimulator:
         c (np.ndarray): Coefficients of the polynomial.
         v_data (np.ndarray): Data points to fit the polynomial to.
     """
-    def objective_func(A, c, v_data):
+    @staticmethod
+    def _objective_func(c, A, v_data):
         return np.sum((A @ c - v_data)**2)
     
     """
@@ -101,26 +102,31 @@ class BoundarySimulator:
     Returns:
         A callable function representing the polynomial.
     """
+    @staticmethod
     def create_constrained_polynomial(s_data, v_data, degree):
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(s_data, degree + 1)
 
         # Define the linear inequality constraints: A @ c <= v_data
         # This ensures the polynomial is always at or below the data points
-        constraints = LinearConstraint(A, lb=-np.inf, ub=v_data)
+        A_upper = np.vander(s_data, degree + 1)
+        upper_bound_constraint = LinearConstraint(A_upper, lb=-np.inf, ub=v_data)
+
+        # P(s) >= 0 
+        num_points = np.linspace(0, 1, 200)
+        A_lower = np.vander(num_points, degree + 1)
+        # We express P(s) >= 0 as: 0 <= P(s) <= infinity
+        lower_bound_constraint = LinearConstraint(A_lower, lb=0, ub=np.inf)
 
         # Use a simple unconstrained fit as the initial guess for the optimizer
         c_initial = np.polyfit(s_data, v_data, degree)
-        # Define the objective function for minimization
-        func = lambda c: BoundarySimulator.objective_func(A, c, v_data)
 
-        # Run the constrained optimization
-        # A good method for constrained problems is 'SLSQP'
-        result = minimize(func, c_initial, method='SLSQP', constraints=constraints)
-
+        # Perform the constrained optimization
+        result = minimize(BoundarySimulator._objective_func, c_initial, args=(A, v_data),
+            method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
+        
         # Extract the optimal polynomial coefficients
         c_optimal = result.x
-
-        # Return a callable polynomial function
-        return lambda s: np.polyval(c_optimal, s)
-    
+        
+        # Return both the function and its coefficients
+        return lambda s: np.polyval(c_optimal, s), c_optimal

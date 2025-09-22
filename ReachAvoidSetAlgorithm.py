@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import fsolve
-from scipy.interpolate import interp1d
+from scipy.optimize import fsolve, root_scalar
 
 from ManipulatorDynamics import ManipulatorDynamics
 from BoundarySimulator import BoundarySimulator
@@ -116,34 +115,32 @@ if __name__ == "__main__":
         V_u = np.array(V_u)
         V_l = np.zeros_like(V_u)
         
-        # Convert sets into formulas C_u and C_l
         print("\nCreating computable functions C_u(s) and C_l(s)...")
-
-        # C_l: a function that always returns 0
+        poly_degree = 6
+        C_u, C_u_coeffs = BoundarySimulator.create_constrained_polynomial(s_star, V_u, degree=poly_degree)
         C_l = lambda s: np.zeros_like(s)
-        # C_u: interpolate V_u for values within [0, 1]
-        # bounds_error = Raise an error for out-of-bounds access, i.e s is not in [0, 1]
-        C_u = interp1d(s_star, V_u, kind='linear', bounds_error=True)
-        # Create a finer set of s-values for a smoother plot
-        s_fine = np.linspace(0, 1, 500)
-        
-        
-        # --- Initialize the ReachabilityCalculator and test S(x) ---
-        reach_calc = ReachabilityCalculator(C_u, C_l, boundaries, s_star)
+        C_l_coeffs = np.zeros(poly_degree + 1)
 
-        print("\n--- Demonstrating S(x) calculation ---")
+        print("\n--- Finding roots of S(x) on the boundaries ---")
+        reach_calc = ReachabilityCalculator(C_u, C_l, boundaries, C_u_coeffs, C_l_coeffs)
+        roots_S_upper, roots_S_lower = reach_calc.find_S_roots(s_star)
+        # Combine all unique roots for plotting
+        all_roots = sorted(list(set(roots_S_upper + roots_S_lower)))
 
-        # Test S(x) on the upper boundary
-        s_test_upper = 0.5
-        x_upper = np.array([s_test_upper, C_u(s_test_upper)])
-        S_upper = reach_calc.calculate_S(x_upper)
-        print(f"For state x = [{x_upper[0]:.3f}, {x_upper[1]:.3f}] on C_u, S(x) = {S_upper:.4f}")
+        # Print the results
+        if roots_S_upper:
+            print("\nFound roots of S(x) on Upper Boundary C_u at s =")
+            for root in roots_S_upper: 
+                print(f"  {root:.6f}")
+        else:
+            print("\nNo roots of S(x) were found on the upper boundary.")
 
-        # Test S(x) on the lower boundary
-        s_test_lower = 0.5
-        x_lower = np.array([s_test_lower, C_l(s_test_lower)])
-        S_lower = reach_calc.calculate_S(x_lower)
-        print(f"For state x = [{x_lower[0]:.3f}, {x_lower[1]:.3f}] on C_l, S(x) = {S_lower:.4f}")
+        if roots_S_lower:
+            print("\nFound roots of S(x) on Lower Boundary C_l at s =")
+            for root in roots_S_lower: 
+                print(f"  {root:.6f}")
+        else:
+            print("\nNo roots of S(x) were found on the lower boundary.")
         
         
         # Enable LaTeX rendering for all text in figures
@@ -152,14 +149,28 @@ if __name__ == "__main__":
         # Plot the upper and lower boundary sets
         plt.plot(s_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
         plt.plot(s_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
+        # Create a finer set of s-values for a smoother plot
+        s_fine = np.linspace(0, 1, 500)
         # Plot the upper and lower boundart functions C_u and C_l
         plt.plot(s_fine, C_u(s_fine), 'r--', label='Upper Boundary Function, $C_u(s)$')
         plt.plot(s_fine, C_l(s_fine), 'm--', label='Lower Boundary Function, $C_l(s)$')
-        # Shade the constraint set X (from V_l to V_u, from s=0 to s=1)
-        plt.fill_between(s_star, V_l, V_u, where=(V_u >= V_l), color='lightgrey', alpha=0.3, label='Constraint Set (X)')
         
-        plt.xlabel('Path Parameter \($s$\)', fontsize=12)
-        plt.ylabel('Path Velocity \($\dot{s}$\) (rad/s)', fontsize=12)
+        # If any roots were found
+        if all_roots:
+            # Calculate the height of the vertical lines (up to the C_u curve)
+            ymax_values = C_u(np.array(all_roots))
+            
+            # Draw the vertical lines from y=0 up to the C_u curve
+            plt.vlines(x=all_roots, ymin=0, ymax=ymax_values, 
+                       colors='green', linestyles='solid', label='Roots of $S(x)$')
+        
+        # Shade the constraint set X (from C_l to C_u, from s=0 to s=1)
+        plt.fill_between(s_fine,
+            C_l(s_fine), C_u(s_fine), where=(C_u(s_fine) >= C_l(s_fine)), 
+            color='lightgrey', alpha=0.8, label='Constraint Set (X)')
+        
+        plt.xlabel('Path Parameter, $s$', fontsize=12)
+        plt.ylabel('Path Velocity, $\dot{s}$ (rad/s)', fontsize=12)
         plt.title('Reach Avoid Set Algorithm', fontsize=14)
         plt.grid(True)
         plt.legend(fontsize=10)
