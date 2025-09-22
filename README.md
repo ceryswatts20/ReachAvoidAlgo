@@ -1,6 +1,6 @@
 ## Setup
 
-- Have Python 3.13
+- Have Python 3.13 and MikTex installed
 
 ### 1. Open a terminal
 

@@ -1,28 +1,30 @@
 import math
 import numpy as np
 
+"""
+Generates the parameterised Lagrangian dynamics for robotic manipulators.
+Currently supports a 2-link manipulator with revolute joints."""
 class ManipulatorDynamics:
-    """
-    Generates the parameterised Lagrangian dynamics for robotic manipulators.
-    """
-
+    
     GRAVITATIONAL_CONSTANT = 9.81
-
+    
+    """
+    Initializes the ManipulatorDynamics class with link masses, lengths,
+    and start/end joint angles in radians.
+    """
     def __init__(self, m, L, q_start_rad, q_end_rad):
-        """
-        Initializes the ManipulatorDynamics class with link masses, lengths,
-        and start/end joint angles in radians.
-        """
+        
         self.m = m
         self.L = L
         # Ensure q_start and q_end are column vectors
         self.q_start = q_start_rad.reshape(-1, 1)
         self.q_end = q_end_rad.reshape(-1, 1)
-
+        
+    """
+    Creates the mass matrix for a 2 Link, revolute joint robotic manipulator.
+    """
     def _mass_matrix_2_rev(self, q: np.ndarray) -> np.ndarray:
-        """
-        Creates the mass matrix for a 2 Link, revolute joint robotic manipulator.
-        """
+        
         m1, m2 = self.m
         L1, L2 = self.L
         q1, q2 = q[0, 0], q[1, 0]
@@ -33,12 +35,13 @@ class ManipulatorDynamics:
         M22 = m2 * L2**2
 
         return np.array([[M11, M12], [M21, M22]])
-
+    
+    """
+    Create the c vector containing the Coriolis and centripetal torques
+    of a 2 Link, revolute joint robotic manipulator.
+    """
     def _c_vector_2_rev(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
-        """
-        Create the c vector containing the Coriolis and centripetal torques
-        of a 2 Link, revolute joint robotic manipulator.
-        """
+        
         _, m2 = self.m
         L1, L2 = self.L
         q1, q2 = q[0, 0], q[1, 0]
@@ -49,10 +52,10 @@ class ManipulatorDynamics:
 
         return np.array([[c1], [c2]])
 
+    """
+    Creates the gravitational torque vector for a 2 Link, revolute joint robotic manipulator.
+    """
     def _gravitational_vector_2_rev(self, q: np.ndarray) -> np.ndarray:
-        """
-        Creates the gravitational torque vector for a 2 Link, revolute joint robotic manipulator.
-        """
         m1, m2 = self.m
         L1, L2 = self.L
         q1, q2 = q[0, 0], q[1, 0]
@@ -62,11 +65,12 @@ class ManipulatorDynamics:
         g2 = m2 * g * L2 * math.cos(q1 + q2)
 
         return np.array([[g1], [g2]])
-
+    
+    """
+    Generates the path-parameterized Lagrangian dynamics for the 2 Link manipulator with revolute joints.
+    """
     def get_2_rev_dynamics(self, s: float, sdot: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Generates the path-parameterized Lagrangian dynamics for the 2 Link manipulator with revolute joints.
-        """
+        
         q_s_dot_path = self.q_end - self.q_start
         q_s = self.q_start + s * q_s_dot_path
         qdot = q_s_dot_path * sdot

@@ -1,9 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
+from scipy.interpolate import interp1d
 
 from ManipulatorDynamics import ManipulatorDynamics
-from Simulations import Simulations
+from BoundarySimulator import BoundarySimulator
+from ReachabilityCalculator import ReachabilityCalculator
 
 def load_parameters_from_file(filepath='parameters.txt'):
     # Dictionary to hold extracted parameters
@@ -86,20 +88,20 @@ if __name__ == "__main__":
 
         # --- Initialize Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end)
-        simulation = Simulations(min_tau_loaded, max_tau_loaded, robot_dynamics)
+        boundaries = BoundarySimulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
 
         # Lots of s values
         s_star = np.linspace(0, 1, 101)
         # List to store found sdot values
         V_u = []
 
-        print("\nCalculating Velocity Limit Curve (V_u) where VLC = 0...")
+        print("\nCalculating Velocity Limit Curve (V_u)...")
         current_sdot_guess = 30.0
         # Iterate through each s value and find the sdot where VLC = 0
         for s_val in s_star:
             # Define the upper boundary function for fsolve
             upper_bound= lambda sdot_to_solve: \
-                simulation.calculate_upper_boundary(s_val, sdot_to_solve)
+                boundaries.calculate_upper_boundary(s_val, sdot_to_solve)
             try:
                 sdot_found = fsolve(upper_bound, current_sdot_guess,
                                     full_output=False,
@@ -114,15 +116,47 @@ if __name__ == "__main__":
         V_u = np.array(V_u)
         V_l = np.zeros_like(V_u)
         
+        # Convert sets into formulas C_u and C_l
+        print("\nCreating computable functions C_u(s) and C_l(s)...")
+
+        # C_l: a function that always returns 0
+        C_l = lambda s: np.zeros_like(s)
+        # C_u: interpolate V_u for values within [0, 1]
+        # bounds_error = Raise an error for out-of-bounds access, i.e s is not in [0, 1]
+        C_u = interp1d(s_star, V_u, kind='linear', bounds_error=True)
+        # Create a finer set of s-values for a smoother plot
+        s_fine = np.linspace(0, 1, 500)
+        
+        
+        # --- Initialize the ReachabilityCalculator and test S(x) ---
+        reach_calc = ReachabilityCalculator(C_u, C_l, boundaries, s_star)
+
+        print("\n--- Demonstrating S(x) calculation ---")
+
+        # Test S(x) on the upper boundary
+        s_test_upper = 0.5
+        x_upper = np.array([s_test_upper, C_u(s_test_upper)])
+        S_upper = reach_calc.calculate_S(x_upper)
+        print(f"For state x = [{x_upper[0]:.3f}, {x_upper[1]:.3f}] on C_u, S(x) = {S_upper:.4f}")
+
+        # Test S(x) on the lower boundary
+        s_test_lower = 0.5
+        x_lower = np.array([s_test_lower, C_l(s_test_lower)])
+        S_lower = reach_calc.calculate_S(x_lower)
+        print(f"For state x = [{x_lower[0]:.3f}, {x_lower[1]:.3f}] on C_l, S(x) = {S_lower:.4f}")
+        
+        
         # Enable LaTeX rendering for all text in figures
-        plt.rcParams['text.usetex'] = True
+        #plt.rcParams['text.usetex'] = True
         plt.figure(figsize=(12, 7))
-        # Plot the upper boundary (V_u)
+        # Plot the upper and lower boundary sets
         plt.plot(s_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
         plt.plot(s_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
-        # Shade the constraint set X (from C_l to V_u, from s=0 to s=1)
-        plt.fill_between(s_star, V_l, V_u, where=(V_u >= V_l),
-                         color='lightgrey', alpha=0.3, label='Constraint Set (X)')
+        # Plot the upper and lower boundart functions C_u and C_l
+        plt.plot(s_fine, C_u(s_fine), 'r--', label='Upper Boundary Function, $C_u(s)$')
+        plt.plot(s_fine, C_l(s_fine), 'm--', label='Lower Boundary Function, $C_l(s)$')
+        # Shade the constraint set X (from V_l to V_u, from s=0 to s=1)
+        plt.fill_between(s_star, V_l, V_u, where=(V_u >= V_l), color='lightgrey', alpha=0.3, label='Constraint Set (X)')
         
         plt.xlabel('Path Parameter \($s$\)', fontsize=12)
         plt.ylabel('Path Velocity \($\dot{s}$\) (rad/s)', fontsize=12)
