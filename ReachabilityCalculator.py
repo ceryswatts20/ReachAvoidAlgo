@@ -34,7 +34,6 @@ class ReachabilityCalculator:
         self.m_u = lambda s: np.polyval(m_u_coeffs, s)
         self.m_l = lambda s: np.polyval(m_l_coeffs, s)
 
-
     """
     Represents the system dynamics f(x, u(x, lambda)).
     u = 0 corresponds to min acceleration, L and u = 1 to max U
@@ -113,7 +112,7 @@ class ReachabilityCalculator:
         S_values_on_Vl = [self.S_on_lower_boundary(s) for s in x_points]
 
         # Find roots on the upper boundary
-        roots_S_upper = []
+        roots_S_upper = set()
         # Iterate through consecutive pairs of x_points to find sign changes
         for i in range(len(x_points) - 1):
             # x1 test points
@@ -123,7 +122,7 @@ class ReachabilityCalculator:
             # Check for a root at x1_1
             if np.isclose(S1, 0):
                 # Add the root if it's not already in the list 
-                roots_S_upper.append(x1_1)
+                roots_S_upper.add(x1_1)
             # If there's a sign change
             elif S1 * S2 < 0:
                 # Use root_scalar to find the root in the interval
@@ -131,13 +130,13 @@ class ReachabilityCalculator:
                 # If the solver converged
                 if sol.converged: 
                     # Add the found root
-                    roots_S_upper.append(sol.root)
+                    roots_S_upper.add(sol.root)
         # Check for a root at the last point
         if np.isclose(S_values_on_Vu[-1], 0): 
-            roots_S_upper.append(x_points[-1])
+            roots_S_upper.add(x_points[-1])
 
         # Find roots on the lower boundary
-        roots_S_lower = []
+        roots_S_lower = set()
         # Iterate through consecutive pairs of x_points to find sign changes
         for i in range(len(x_points) - 1):
             # x1 test points
@@ -147,7 +146,7 @@ class ReachabilityCalculator:
             # Check for a root at x1_1
             if np.isclose(S1, 0): 
                 # Add the root if it's not already in the list
-                roots_S_lower.append(x1_1)
+                roots_S_lower.add(x1_1)
             # If there's a sign change
             elif S1 * S2 < 0:
                 # Use root_scalar to find the root in the interval
@@ -155,12 +154,12 @@ class ReachabilityCalculator:
                 # If the solver converged
                 if sol.converged: 
                     # Add the found root
-                    roots_S_lower.append(sol.root)
+                    roots_S_lower.add(sol.root)
         # Check for a root at the last point
-        if np.isclose(S_values_on_Vl[-1], 0): 
+        if np.isclose(S_values_on_Vl[-1], 0):   
             # Add the last point as a root
-            roots_S_lower.append(x_points[-1])
+            roots_S_lower.add(x_points[-1])
 
         # Return sorted, unique roots
-        return sorted(list(set(roots_S_upper))), sorted(list(set(roots_S_lower)))
+        return sorted(list(roots_S_upper.union(roots_S_lower)) + [0, 1])
             

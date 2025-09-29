@@ -123,29 +123,69 @@ if __name__ == "__main__":
 
         print("\n--- Finding roots of S(x) on the boundaries ---")
         reach_calc = ReachabilityCalculator(C_u, C_l, boundaries, C_u_coeffs, C_l_coeffs)
-        roots_S_upper, roots_S_lower = reach_calc.find_S_roots(s_star)
-        # Combine all unique roots for plotting
-        all_roots = sorted(list(set(roots_S_upper + roots_S_lower)))
+        roots = reach_calc.find_S_roots(s_star)
 
         # Print the results
-        if roots_S_upper:
-            print("\nFound roots of S(x) on Upper Boundary C_u at s =")
-            for root in roots_S_upper: 
+        if roots:
+            print("\nFound roots of S(x) on Boundaries at s =")
+            for root in roots: 
                 print(f"  {root:.6f}")
         else:
-            print("\nNo roots of S(x) were found on the upper boundary.")
-
-        if roots_S_lower:
-            print("\nFound roots of S(x) on Lower Boundary C_l at s =")
-            for root in roots_S_lower: 
-                print(f"  {root:.6f}")
-        else:
-            print("\nNo roots of S(x) were found on the lower boundary.")
+            print("\nNo roots of S(x) were found.")
+            
+        
+        print("\n--- Generating Partition I ---")
+        # Initialize lists for intervals
+        I_in = []
+        I_out = []
+        I = []
+        # Tolerance for checking sign changes
+        tolerance = 1e-6
+        
+        for i in range(len(roots)-1):
+            x1_start = roots[i]
+            x1_end = roots[i+1]
+            print(f"Interval I_{i+1}: [{x1_end:.6f}, {x1_start:.6f}]")
+            
+            # Check the sign just before the end of the interval
+            if i < len(roots) - 1:
+                # Small step back from the end of the interval
+                x1_before_end = x1_end - tolerance
+                # Check the sign of S just before the end of the interval
+                s_before = reach_calc.calculate_S(np.array([x1_before_end, C_u(x1_before_end)]))
+                # True if S(x) <= 0, False if S(x) > 0
+                interval_sign = (s_before <= 0)
+                #print(f"  Sign of S(x) just before {x1_end:.6f}: {s_before:.6f}")
+            
+            # If S(x) <= 0
+            if interval_sign:
+                # Add to I_in
+                I_in.append([x1_end, x1_start])
+            # If S(x) > 0
+            else:
+                # Add to I_out
+                I_out.append([x1_end, x1_start])
+    
+            I.append([x1_end, x1_start])
+            
+        # Output the intervals
+        print("\n--- Generated Intervals ---")
+        print(f"I: {I}")
+        print(f"I_in: {I_in}")
+        print(f"I_out: {I_out}")
         
         
+        
+        # --- Plotting ---
+        print("\nGenerating plot...")
         # Enable LaTeX rendering for all text in figures
         #plt.rcParams['text.usetex'] = True
         plt.figure(figsize=(12, 7))
+        plt.xlabel('Path Parameter, $s$', fontsize=12)
+        plt.ylabel('Path Velocity, $\dot{s}$ (rad/s)', fontsize=12)
+        plt.title('Reach Avoid Set Algorithm', fontsize=14)
+        plt.grid(True)
+        
         # Plot the upper and lower boundary sets
         plt.plot(s_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
         plt.plot(s_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
@@ -156,23 +196,56 @@ if __name__ == "__main__":
         plt.plot(s_fine, C_l(s_fine), 'm--', label='Lower Boundary Function, $C_l(s)$')
         
         # If any roots were found
-        if all_roots:
+        if roots:
             # Calculate the height of the vertical lines (up to the C_u curve)
-            ymax_values = C_u(np.array(all_roots))
+            ymax_values = C_u(np.array(roots))
             
             # Draw the vertical lines from y=0 up to the C_u curve
-            plt.vlines(x=all_roots, ymin=0, ymax=ymax_values, 
+            plt.vlines(x=roots, ymin=0, ymax=ymax_values, 
                        colors='green', linestyles='solid', label='Roots of $S(x)$')
         
-        # Shade the constraint set X (from C_l to C_u, from s=0 to s=1)
-        plt.fill_between(s_fine,
-            C_l(s_fine), C_u(s_fine), where=(C_u(s_fine) >= C_l(s_fine)), 
-            color='lightgrey', alpha=0.8, label='Constraint Set (X)')
+        # Shade the intervals
+        for i, interval in enumerate(I_in):
+            # Extract the start and end of the interval
+            x1_start = interval[1]
+            x1_end = interval[0]
+    
+            # Create a mask for the s-values within the interval
+            mask = (s_fine >= x1_start) & (s_fine <= x1_end)
+            
+            if i == 0:
+                label = '$S(x) \leq 0$'
+            else:
+                label = ''
+    
+            # Fill the region between C_l and C_u for the interval
+            plt.fill_between(s_fine, C_l(s_fine), C_u(s_fine),
+                      where=mask, color='lightgreen', alpha=0.3,
+                      label=label)
         
-        plt.xlabel('Path Parameter, $s$', fontsize=12)
-        plt.ylabel('Path Velocity, $\dot{s}$ (rad/s)', fontsize=12)
-        plt.title('Reach Avoid Set Algorithm', fontsize=14)
-        plt.grid(True)
+        for i, interval in enumerate(I_out):
+            # Extract the start and end of the interval
+            x1_start = interval[1]
+            x1_end = interval[0]
+    
+            # Create a mask for the s-values within the interval
+            mask = (s_fine >= x1_start) & (s_fine <= x1_end)
+            
+            if i == 0:
+                label = '$S(x) > 0$'
+            else:
+                label = ''
+    
+            # Fill the region between C_l and C_u for the interval
+            plt.fill_between(s_fine, C_l(s_fine), C_u(s_fine),
+                      where=mask, color='lightcoral', alpha=0.3,
+                      label=label)
+        
+        # Shade the constraint set X (from C_l to C_u, from s=0 to s=1)
+        # plt.fill_between(s_fine, C_l(s_fine), C_u(s_fine), 
+        #                  where=(C_u(s_fine) >= C_l(s_fine)), color='lightgrey', 
+        #                  alpha=0.8, label='Constraint Set (X)')
+        
         plt.legend(fontsize=10)
         plt.show()
 

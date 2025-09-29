@@ -100,7 +100,7 @@ class BoundarySimulator:
         degree (int): Degree of the polynomial to fit.
 
     Returns:
-        A callable function representing the polynomial.
+        A callable function representing the polynomial and its coefficients.
     """
     @staticmethod
     def create_constrained_polynomial(s_data, v_data, degree):
