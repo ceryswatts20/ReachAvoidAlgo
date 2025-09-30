@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from functools import partial
 
 from ManipulatorDynamics import ManipulatorDynamics
 from Simulator import Simulator
@@ -8,7 +9,7 @@ from ReachabilityCalculator import ReachabilityCalculator
 import HelperFunctions
 
 """
-    Event function to stop integration when x1 = 0 or x2 crosses C_u or C_l.
+    Event function to stop integration when x1 = 0 or x crosses C_u or C_l.
     
     Args:
         t (float): Current time.
@@ -18,10 +19,8 @@ import HelperFunctions
     Returns:
         np.ndarray: Array of values indicating when to stop.
 """
-def backwardsStopEvent(t, y, *args):
-    
-    x1, x2 = y
-    C_u, C_l = args
+def backwardsStopEvent(t, x, C_u, C_l):
+    x1, x2 = x
     
     # Stop if x1 = 0
     value_x1 = x1
@@ -30,35 +29,12 @@ def backwardsStopEvent(t, y, *args):
     # Stop if crossing C_l
     value_Cl = x2 - C_l(x1)
     
-    return np.array([value_x1, value_Cu, value_Cl])
-
-"""
-    Solves the ODE for the given initial conditions and parameters.
+    # Values to monitor
+    values = np.array([value_x1, value_Cu, value_Cl])
+    # Stop when either condition is met
+    isterminal = [True, True, True]
     
-    Args:
-        C_u (callable): Upper boundary function.
-        C_l (callable): Lower boundary function.
-        boundary_simulator (Simulator): Instance of Simulator.
-        initial_conditions (np.ndarray): Initial state [x1, x2].
-        t_span (tuple): Start and end times for the integration.
-        direction (str): Direction of integration ('forward' or 'backward').
-        u (int): Control input (0 or 1).
-    
-    Returns:
-        OdeSolution: Solution object containing the results of the ODE integration.
-"""
-def solve_ode(C_u, C_l, func, initial_conditions, t_span):
-    
-        # Event handling
-        # Stop when either condition is met
-        isterminal = [True, True, True]
-        # Detect any crossing
-        direction = [0, 0, 0]
-        
-        # Solve ODE
-        sol = solve_ivp(func, t_span, initial_conditions, method='RK45', events=backwardsStopEvent, args=(C_u, C_l), rtol=1e-6, atol=1e-8)
-        
-        return sol
+    return (values, isterminal)
 
 if __name__ == "__main__":
     try:
@@ -76,7 +52,6 @@ if __name__ == "__main__":
         # --- Initialize Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
-        
 
         print("\nCalculating Velocity Limit Curve (V_u)...")
         # Lots of x1 values
@@ -93,17 +68,44 @@ if __name__ == "__main__":
         C_l = lambda x1: np.zeros_like(x1)
         C_l_coeffs = np.zeros(poly_degree + 1)
         
+        print("\n--- Finding roots of S(x) on the boundaries ---")
+        reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs, C_l_coeffs)
+        roots = reach_calc.find_S_roots(x1_star)
         
-        # Initial conditions
-        x0 = np.array([1.0, 0.0])
+        print("\n--- Generating Partition I ---")
+        tolerance = 1e-6
+        # Initialize lists for intervals
+        I_in, I_out, I = reach_calc.generate_partition_I(roots, tolerance)
+        
+        print("\n--- Generating Target Set, X_T ---")
+        xstar_u = 4
+        xstar_l = 0.05
+        # Target set as a line segment in state space - [x1, x2_min, x2_max]
+        X_T = [0.8, xstar_l, xstar_u]
+        
+        
+        print("\n--- Simulating System Trajectory, Tb(xstar_u, 0) ---")
+        # Initial conditions - top of the target set
+        x0 = np.array([X_T[0], xstar_u])
         t_span = (0.0, 10.0)
         # Integration direction
         direction = 'backward'
         # Max decceleration dynamics (L)
         u = 0
         
-        function = lambda t, y: simulator.get_double_integrator_dynamics(y, direction, u)
-        sol = solve_ode(C_u, C_l, function, x0, t_span)
+        # Wrap so SciPy calls dynamics as: dynamics(t, x)
+        # def dynamics_func(t, x, direction=direction, u=u):
+        #     return simulator.get_double_integrator_dynamics(t, x, direction, u)
+
+        # # Wrap for the event function: event(t, y)
+        # def stopFunc(t, y, C_u=C_u, C_l=C_l):
+        #     return backwardsStopEvent(t, y, C_u, C_l)
+        
+        dynamics_func = lambda t, x, direction=direction, u=u: simulator.get_double_integrator_dynamics(t, x, direction, u)
+        stopFunc = lambda t, x, C_u=C_u, C_l=C_l: backwardsStopEvent(t, x, C_u, C_l)
+        
+        # Solve ODE
+        T_star_u = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=stopFunc, rtol=1e-6, atol=1e-8)
         
         # Plot results
         plt.figure(figsize=(10, 5))
@@ -120,9 +122,6 @@ if __name__ == "__main__":
         # Plot the upper and lower boundart functions C_u and C_l
         plt.plot(x1_fine, C_u(x1_fine), 'r--', label='Upper Boundary Function, $C_u(x1)$')
         plt.plot(x1_fine, C_l(x1_fine), 'm--', label='Lower Boundary Function, $C_l(x1)$')
-        
-        plt.plot(sol.t, sol.y[0], label='x1')
-        plt.plot(sol.t, sol.y[1], label='x2')
         
         plt.legend()
         plt.show()

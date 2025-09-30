@@ -98,7 +98,7 @@ class Simulator:
         return V_u
     
     
-    def get_double_integrator_dynamics(self, x: np.ndarray, direction, u: int) -> np.ndarray:
+    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int) -> np.ndarray:
         # Matrix A (2x2)
         A = np.array([[0, 1],[0, 0]])
         # Matrix B (2x1 column vector)

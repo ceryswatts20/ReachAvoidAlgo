@@ -175,8 +175,6 @@ class ReachabilityCalculator:
     def generate_partition_I(self, roots: list, tolerance) -> tuple[list, list, list]:
         # Initialize lists for intervals
         I_in, I_out, I = [], [], []
-        print("In generate_partition_I")
-        print(f"Roots: {roots}")
         
         # Generate intervals from the roots
         for i in range(len(roots)-1):
@@ -207,3 +205,24 @@ class ReachabilityCalculator:
         
         return I_in, I_out, I
     
+    """
+        Checks if a given state x_current = [x1, x2] is within the target set.
+        
+        Args:
+            x_current (np.ndarray): The current state [x1, x2].
+            X_T (tuple): The target set defined as (x1_target, x2_min, x2_max).
+            
+        Returns:
+            bool: True if x_current is in the target set, False otherwise.
+    """
+    @staticmethod
+    def is_in_target_set(x_current, X_T):
+        x1, x2 = x_current
+        target_x1, target_x2_min, target_x2_max = X_T
+        
+        # Check if x1 is the target set x1
+        x1_condition = target_x1 == x1
+        # Check if x2 is within the target set i.e less than x2_max and greater than x2_min
+        x2_condition = (x2 >= target_x2_min) and (x2 <= target_x2_max)
+        
+        return x1_condition and x2_condition
