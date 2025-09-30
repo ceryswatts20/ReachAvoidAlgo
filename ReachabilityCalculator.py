@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import root_scalar
 
-from BoundarySimulator import BoundarySimulator
+from Simulator import Simulator
 
 """
     Implements reachability calculations, including the S-function, based on
@@ -15,12 +15,11 @@ class ReachabilityCalculator:
     Args:
         C_u_func (callable): The upper velocity limit function C_u(s).
         C_l_func (callable): The lower velocity limit function C_l(s).
-        simulator (Simulations): Instance for getting accel bounds L and U.
+        simulator (Simulator): Instance for getting accel bounds L and U.
         C_u_coeffs (np.ndarray): The coefficients of the C_u polynomial.
         C_l_coeffs (np.ndarray): The coefficients of the C_l polynomial.
     """
-    def __init__(self, C_u_func: callable, C_l_func: callable, boundarySim: BoundarySimulator, 
-                 C_u_coeffs: np.ndarray, C_l_coeffs: np.ndarray):
+    def __init__(self, C_u_func: callable, C_l_func: callable, boundarySim: Simulator, C_u_coeffs: np.ndarray, C_l_coeffs: np.ndarray):
         
         self.C_u = C_u_func
         self.C_l = C_l_func
@@ -86,7 +85,7 @@ class ReachabilityCalculator:
             )
     
     
-    # Define nested helper functions for S(s) on each boundary
+    # Define nested helper functions for S(x) on each boundary
     def S_on_upper_boundary(self, s_val):
         x_state = np.array([s_val, self.C_u(s_val)])
     
@@ -101,7 +100,7 @@ class ReachabilityCalculator:
     Finds the roots of S(x)=0 on the upper and lower boundaries.
     
     Args:
-        x_points (np.ndarray): The discrete s-points to check for sign changes.
+        x_points (np.ndarray): The discrete x1-points to check for sign changes.
 
     Returns:
         A tuple containing two lists: (roots_on_upper, roots_on_lower).
@@ -162,4 +161,49 @@ class ReachabilityCalculator:
 
         # Return sorted, unique roots
         return sorted(list(roots_S_upper.union(roots_S_lower)) + [0, 1])
+    
+    """
+    Generates the partition I and the interval sets I_in, I_out based on the roots of S(x).
+    
+    Args:
+        roots (list): List of roots of S(x).
+        tolerance (float): Small value to check the sign of S(x) just before the root.
+        
+    Returns:
+        A tuple containing three lists: (I_in, I_out, I).
+    """
+    def generate_partition_I(self, roots: list, tolerance) -> tuple[list, list, list]:
+        # Initialize lists for intervals
+        I_in, I_out, I = [], [], []
+        print("In generate_partition_I")
+        print(f"Roots: {roots}")
+        
+        # Generate intervals from the roots
+        for i in range(len(roots)-1):
+            x1_start = roots[i]
+            x1_end = roots[i+1]
             
+            # Save the interval in partition I
+            I.append([x1_end, x1_start])
+            
+            # Check the sign just before the end of the interval
+            if i < len(roots) - 1:
+                # Small step back from the end of the interval
+                x1_before_end = x1_end - tolerance
+                # Check the sign of S just before the end of the interval
+                s_before = self.calculate_S(np.array([x1_before_end, self.C_u(x1_before_end)]))
+                # True if S(x) <= 0, False if S(x) > 0
+                interval_sign = (s_before <= 0)
+                #print(f"Interval [{x1_start:.6f}, {x1_end:.6f}] - S just before end: {s_before:.6f} - S(x) <= 0: {interval_sign}")
+            
+            # If S(x) <= 0
+            if interval_sign:
+                # Add to I_in
+                I_in.append([x1_end, x1_start])
+            # If S(x) > 0
+            else:
+                # Add to I_out
+                I_out.append([x1_end, x1_start])
+        
+        return I_in, I_out, I
+    
