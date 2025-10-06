@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
-from functools import partial
 
 from ManipulatorDynamics import ManipulatorDynamics
 from Simulator import Simulator
@@ -22,17 +21,19 @@ import HelperFunctions
 def backwardsStopEvent(t, x, C_u, C_l):
     x1, x2 = x
     
-    # Stop if x1 = 0
-    value_x1 = x1
+    # Stop if crossing x-axis -> x2 < 0
+    value_x2 = float(x2)
+    # Stop if crosses y-axis -> x1 < 0
+    value_x1 = float(x1)
     # Stop if crossing C_u
-    value_Cu = x2 - C_u(x1)
+    value_Cu = float(x2 - C_u(x1))
     # Stop if crossing C_l
-    value_Cl = x2 - C_l(x1)
+    value_Cl = float(x2 - C_l(x1))
     
     # Values to monitor
-    values = np.array([value_x1, value_Cu, value_Cl])
+    values = np.array([value_x2, value_x1, value_Cu, value_Cl])
     # Stop when either condition is met
-    isterminal = [True, True, True]
+    isterminal = [True, True, True, True]
     
     return (values, isterminal)
 
@@ -84,34 +85,54 @@ if __name__ == "__main__":
         X_T = [0.8, xstar_l, xstar_u]
         
         
-        print("\n--- Simulating System Trajectory, Tb(xstar_u, 0) ---")
-        # Initial conditions - top of the target set
-        x0 = np.array([X_T[0], xstar_u])
+        print("\n--- Simulating System Trajectories, Tb(xstar_u, 0) & Tb(xstar_l, 1) ---")
         t_span = (0.0, 10.0)
+        # Initial conditions - top of the target set
+        x0_u = np.array([X_T[0], xstar_u])
+        # Initial conditions - bottom of the target set
+        x0_l = np.array([X_T[0], xstar_l])
         # Integration direction
         direction = 'backward'
-        # Max decceleration dynamics (L)
-        u = 0
         
-        # Wrap so SciPy calls dynamics as: dynamics(t, x)
-        # def dynamics_func(t, x, direction=direction, u=u):
-        #     return simulator.get_double_integrator_dynamics(t, x, direction, u)
-
-        # # Wrap for the event function: event(t, y)
-        # def stopFunc(t, y, C_u=C_u, C_l=C_l):
-        #     return backwardsStopEvent(t, y, C_u, C_l)
+        # Stopping conditions:
+        cross_x_axis = ReachabilityCalculator.event_x2_zero
+        cross_y_axis = ReachabilityCalculator.event_x1_zero
+        cross_Cu = lambda t, x, C_u=C_u: ReachabilityCalculator.event_Cu_cross(t, x, C_u)
+        cross_Cl = lambda t, x, C_l=C_l: ReachabilityCalculator.event_Cl_cross(t, x, C_l)
+        # Stop when any of these events occur
+        cross_x_axis.terminal = True
+        cross_y_axis.terminal = True
+        cross_Cu.terminal = True
+        cross_Cl.terminal = True
+        # Set direction to zero to detect all crossings
+        cross_x_axis.direction = 0
+        cross_y_axis.direction = 0
+        cross_Cu.direction = 0
+        cross_Cl.direction = 0
         
-        dynamics_func = lambda t, x, direction=direction, u=u: simulator.get_double_integrator_dynamics(t, x, direction, u)
-        stopFunc = lambda t, x, C_u=C_u, C_l=C_l: backwardsStopEvent(t, x, C_u, C_l)
-        
+        # Define the ode function for upper trajectory
+        dynamics_func_upper = lambda t, x, direction=direction, u=0: simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Solve ODE
-        T_star_u = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=stopFunc, rtol=1e-6, atol=1e-8)
+        T_star_u = solve_ivp(dynamics_func_upper, t_span, x0_u, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], rtol=1e-6, atol=1e-8)
+        # Define the ode function for lower trajectory
+        dynamics_func_lower = lambda t, x, direction=direction, u=1: simulator.get_double_integrator_dynamics(t, x, direction, u)
+        # Solve ODE
+        T_star_l = solve_ivp(dynamics_func_lower, t_span, x0_l, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], rtol=1e-6, atol=1e-8)
+        
+        # Find the index of the left most point in the trajectory (i.e., minimum x1)
+        min_index_u = np.argmin(T_star_u.y[0])
+        x_d = [T_star_u.y[0, min_index_u], T_star_u.y[1, min_index_u]]
+        print(f"Left most state in trajectory Tb(xstar_u, 0): {x_d[0]:.6f}, {x_d[1]:.6f}")
+        # Find the index of the left most point in the trajectory (i.e., minimum x1)
+        min_index_l = np.argmin(T_star_l.y[0])
+        x_a = [T_star_l.y[0, min_index_l], T_star_l.y[1, min_index_l]]
+        print(f"Left most state in trajectory Tb(xstar_l, 0): {x_a[0]:.6f}, {x_a[1]:.6f}")
         
         # Plot results
         plt.figure(figsize=(10, 5))
-        plt.xlabel('Time')
-        plt.ylabel('State')
-        plt.title('System Trajectory')
+        plt.xlabel('x_1')
+        plt.ylabel('x_2')
+        plt.title('Reach Avoid Set Computation')
         plt.grid()
         
         # Plot the upper and lower boundary sets
@@ -122,6 +143,18 @@ if __name__ == "__main__":
         # Plot the upper and lower boundart functions C_u and C_l
         plt.plot(x1_fine, C_u(x1_fine), 'r--', label='Upper Boundary Function, $C_u(x1)$')
         plt.plot(x1_fine, C_l(x1_fine), 'm--', label='Lower Boundary Function, $C_l(x1)$')
+        # Plot targer set X_T
+        plt.vlines(X_T[0], X_T[1], X_T[2], colors='orange', label='Target Set, $X_T$')
+        plt.plot(X_T[0], xstar_u, 'ko', label='$x^*_u$')
+        plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
+        
+        # Plot trajectories
+        plt.plot(T_star_u.y[0, :], T_star_u.y[1, :], 'c-', label='Trajectory, $T_b(x^*_u, 0)$')
+        plt.plot(T_star_l.y[0, :], T_star_l.y[1, :], 'y-', label='Trajectory, $T_b(x^*_l, 0)$')
+        # Plot x_d
+        plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
+        # Plot x_a
+        plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
         
         plt.legend()
         plt.show()

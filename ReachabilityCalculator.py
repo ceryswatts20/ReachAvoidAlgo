@@ -226,3 +226,61 @@ class ReachabilityCalculator:
         x2_condition = (x2 >= target_x2_min) and (x2 <= target_x2_max)
         
         return x1_condition and x2_condition
+    
+    """
+        Event function to stop integration when crossing y-axis.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x1).
+    """
+    def event_x1_zero(t, x):
+        return x[0]
+    
+    """
+        Event function to stop integration when crossing x-axis.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2).
+    """
+    def event_x2_zero(t, x):
+        return x[1]
+    
+    """
+        Event function to stop integration when crossing the upper boundary.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2 - C_u(x1)).
+    """
+    def event_Cu_cross(t, x, C_u):
+        # Stop when x2 - Cu(x1) = 0
+        x1 = float(x[0])
+        x2 = float(x[1])
+        return float(x2 - C_u(x1))
+    
+    """
+        Event function to stop integration when crossing the lower boundary.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2 - C_l(x1)).
+    """
+    def event_Cl_cross(t, x, C_l):
+        # Stop when x2 - Cl(x1) = 0
+        x1 = float(x[0])
+        x2 = float(x[1])
+        return float(x2 - C_l(x1))

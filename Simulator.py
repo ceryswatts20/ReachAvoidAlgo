@@ -100,11 +100,17 @@ class Simulator:
     
     def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int) -> np.ndarray:
         # Matrix A (2x2)
-        A = np.array([[0, 1],[0, 0]])
+        A = np.array([[0, 1],
+                      [0, 0]])
         # Matrix B (2x1 column vector)
-        B = np.array([[0], [1]])
+        B = np.array([0, 1])
+        # Ensure x is 1D (SciPy passes a 1D y)
+        x = np.asarray(x).reshape(2,)
+        
         # Acceleration bounds
         L, U = self.get_accel_bounds(x[0], x[1])
+        L = float(L)
+        U = float(U)
         
         # Integrating forwards in time
         if direction == 'forward':
@@ -130,6 +136,7 @@ class Simulator:
                 raise ValueError("u must be 0 or 1 for this function.")
         else:
             raise ValueError("direction must be 'forward' or 'backward' for this function.")
+        
     
     """
     Objective function for polynomial fitting.
