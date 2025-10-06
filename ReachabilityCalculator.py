@@ -284,3 +284,49 @@ class ReachabilityCalculator:
         x1 = float(x[0])
         x2 = float(x[1])
         return float(x2 - C_l(x1))
+    
+    
+    """
+        Check if the state (x1, x2) lies on the upper boundary curve C_u(x1)
+        within a tolerance.
+        
+        Args:
+            x (np.ndarray): The state [x1, x2].
+            tol (float): Tolerance for checking equality.
+            
+        Returns:
+            bool: True if (x1, x2) is on C_u(x1), False otherwise.
+    """
+    def is_on_upper_boundary(self, x: np.ndarray, tol: float = 1e-6) -> bool:
+        x1, x2 = x
+        cu_val = float(self.C_u(x1))
+        
+        # If state is above the boundary, raise error
+        if x2 > cu_val:
+            raise ValueError(f"State (x1={x1:.6f}, x2={x2:.6f}) is above the upper boundary C_u(x1)={cu_val:.6f}.")
+        # If state is within tolerance below or at the boundary, return True
+        elif x2 <= cu_val and x2 >= cu_val - tol:
+            return True
+        
+    
+    """
+        Check if the state (x1, x2) lies on the lower boundary curve C_l(x1)
+        within a tolerance.
+        
+        Args:
+            x (np.ndarray): The state [x1, x2].
+            tol (float): Tolerance for checking equality.
+            
+        Returns:
+            bool: True if (x1, x2) is on C_l(x1), False otherwise.
+    """
+    def is_on_lower_boundary(self, x: np.ndarray, tol: float = 1e-6) -> bool:
+        x1, x2 = x
+        cl_val = float(self.C_l(x1))
+        
+        # If state is below the boundary, raise error
+        if x2 < cl_val:
+            raise ValueError(f"State (x1={x1:.6f}, x2={x2:.6f}) is below the lower boundary C_l(x1)={cl_val:.6f}.")
+        # If state is within tolerance above or at the boundary, return True
+        elif x2 >= cl_val and x2 <= cl_val + tol:
+            return True

@@ -6,7 +6,7 @@
 % Path start point
 0, 0
 % Path end point
-180, 90
+50, 90
 
 % 2 DOF link masses
 2, 2.5

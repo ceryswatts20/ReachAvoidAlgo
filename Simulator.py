@@ -123,14 +123,13 @@ class Simulator:
             # Error handling
             else:
                 raise ValueError("u must be 0 or 1 for this function.")
-            
         elif direction == 'backward':
             # Min decceleration dynamics (L)
             if u == 0:
                 return -A @ x - B * L
             # Max acceleration dynamics (U)
             elif u == 1:
-                return -A @ x + B * U
+                return -A @ x - B * U
             # Error handling
             else:
                 raise ValueError("u must be 0 or 1 for this function.")
@@ -187,11 +186,7 @@ class Simulator:
         c_initial = np.polyfit(x1_data, v_data, degree)
 
         # Perform the constrained optimization
-        result = minimize(Simulator._objective_func, c_initial, args=(A, v_data),
-            method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
-        # result = minimize(func, c_initial, args=(A, v_data),
-        #     method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
-        
+        result = minimize(Simulator._objective_func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
         
         # Extract the optimal polynomial coefficients
         c_optimal = result.x
