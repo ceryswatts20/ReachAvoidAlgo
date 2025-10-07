@@ -135,22 +135,6 @@ class Simulator:
                 raise ValueError("u must be 0 or 1 for this function.")
         else:
             raise ValueError("direction must be 'forward' or 'backward' for this function.")
-        
-    
-    """
-    Objective function for polynomial fitting.
-    
-    Args:
-        A (np.ndarray): Vandermonde matrix.
-        c (np.ndarray): Coefficients of the polynomial.
-        v_data (np.ndarray): Data points to fit the polynomial to.
-        
-    Returns:
-        float: The sum of squared errors between the polynomial and the data points.
-    """
-    @staticmethod
-    def _objective_func(c, A, v_data):
-        return np.sum((A @ c - v_data)**2)
     
     """
     Creates a polynomial approximation P(x1) for a given set, v_data, at x1 using
@@ -169,7 +153,7 @@ class Simulator:
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(x1_data, degree + 1)
         
-        func = lambda c: np.sum((A @ c - v_data)**2)
+        func = lambda c, A=A, v_data=v_data: np.sum((A @ c - v_data)**2)
 
         # Define the linear inequality constraints: A @ c <= v_data
         # This ensures the polynomial is always at or below the data points
@@ -186,7 +170,7 @@ class Simulator:
         c_initial = np.polyfit(x1_data, v_data, degree)
 
         # Perform the constrained optimization
-        result = minimize(Simulator._objective_func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
+        result = minimize(func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
         
         # Extract the optimal polynomial coefficients
         c_optimal = result.x

@@ -82,21 +82,37 @@ if __name__ == "__main__":
         # Define the ode function for upper trajectory
         dynamics_func_upper = lambda t, x, direction=direction, u=0: simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Solve ODE
-        T_star_u = solve_ivp(dynamics_func_upper, t_span, x0_u, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], rtol=1e-6, atol=1e-8)
-        print(T_star_u.message)
+        T_back_u = solve_ivp(dynamics_func_upper, t_span, x0_u, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
+        print(T_back_u.message)
+        # The last valid time before the event
+        t_end = T_back_u.t[-1]
+        # Create a dense time array for smooth plotting
+        t_dense = np.linspace(T_back_u.t[0], t_end, 500)
+        # Evaluate the solution at dense time points and transpose for easier plotting
+        # T_star_u = array of (x1, x2) pairs along the trajectory
+        T_star_u = T_back_u.sol(t_dense).T
+        
         # Define the ode function for lower trajectory
         dynamics_func_lower = lambda t, x, direction=direction, u=1: simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Solve ODE
-        T_star_l = solve_ivp(dynamics_func_lower, t_span, x0_l, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], rtol=1e-6, atol=1e-8)
-        print(T_star_l.message)
+        T_back_l = solve_ivp(dynamics_func_lower, t_span, x0_l, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
+        print(T_back_l.message)
+        # The last valid time before the event
+        t_end = T_back_l.t[-1]
+        # Create a dense time array for smooth plotting
+        t_dense = np.linspace(T_back_l.t[0], t_end, 500)
+        # Evaluate the solution at dense time points and transpose for easier plotting
+        # T_star_l = array of (x1, x2) pairs along the trajectory
+        T_star_l = T_back_l.sol(t_dense).T
+        
         
         # Find the index of the left most point in the trajectory (i.e., minimum x1)
-        min_index_u = np.argmin(T_star_u.y[0])
-        x_d = [T_star_u.y[0, min_index_u], T_star_u.y[1, min_index_u]]
+        min_index_u = np.argmin(T_star_u[:,0])
+        x_d = T_star_u[min_index_u]
         print(f"Left most state in trajectory Tb(xstar_u, 0): {x_d[0]:.6f}, {x_d[1]:.6f}")
         # Find the index of the left most point in the trajectory (i.e., minimum x1)
-        min_index_l = np.argmin(T_star_l.y[0])
-        x_a = [T_star_l.y[0, min_index_l], T_star_l.y[1, min_index_l]]
+        min_index_l = np.argmin(T_star_l[:,0])
+        x_a = T_star_l[min_index_l]
         print(f"Left most state in trajectory Tb(xstar_l, 1): {x_a[0]:.6f}, {x_a[1]:.6f}")
         
         print("\n--- Algorithm Logic ---")
@@ -105,11 +121,11 @@ if __name__ == "__main__":
         # If x_a and x_d are on the lower boundary
         if reach_calc.is_on_lower_boundary(x_a) and reach_calc.is_on_lower_boundary(x_d):
             print("Both x_a and x_d are on the lower boundary C_l.")
-            Z_u = T_star_u.y.T
+            Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif reach_calc.is_on_upper_boundary(x_a) and reach_calc.is_on_upper_boundary(x_d):
             print("Both x_a and x_d are on the upper boundary C_u.")
-            Z_l = T_star_l.y.T
+            Z_l = T_star_l
         else:
             print("x_a and x_d are on different boundaries.")
             # If x_a is on the lower boundary
@@ -117,14 +133,14 @@ if __name__ == "__main__":
                 print("x_a is on the lower boundary C_l.")
             else:
                 print("x_a is not on the lower boundary C_u.")
-                Z_l = T_star_l.y.T
+                Z_l = T_star_l
             
             # If x_d is on the lower boundary
             if reach_calc.is_on_upper_boundary(x_d):
                 print("x_d is on the upper boundary C_l.")
             else:
                 print("x_d is not on the upper boundary C_u.")
-                Z_u = T_star_u.y.T
+                Z_u = T_star_u
         
         
         # Plot results
@@ -140,20 +156,27 @@ if __name__ == "__main__":
         # Create a finer set of x1-values for a smoother plot
         x1_fine = np.linspace(0, 1, 500)
         # Plot upper and lower boundary functions
-        plt.plot(x1_fine, C_u(x1_fine), 'r--', label='Upper Boundary Function, $C_u(x1)$')
-        plt.plot(x1_fine, C_l(x1_fine), 'm--', label='Lower Boundary Function, $C_l(x1)$')
+        plt.plot(x1_fine, C_u(x1_fine), 'r-', label='Upper Boundary Function, $C_u(x1)$')
+        plt.plot(x1_fine, C_l(x1_fine), 'm-', label='Lower Boundary Function, $C_l(x1)$')
         # Plot targer set X_T
         plt.vlines(X_T[0], X_T[1], X_T[2], colors='orange', label='Target Set, $X_T$')
         plt.plot(X_T[0], xstar_u, 'ko', label='$x^*_u$')
         plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
-        plt.plot(T_star_u.y[0, :], T_star_u.y[1, :], 'c-', label='Trajectory, $T^*_u$')
-        plt.plot(T_star_l.y[0, :], T_star_l.y[1, :], 'y-', label='Trajectory, $T^*_l$')
+        plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
+        plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
         # Plot x_d
         plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
         # Plot x_a
         plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
+        
+        Z = HelperFunctions.slice(C_u, I_in[0])
+        plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Test Slice')
+        Z = HelperFunctions.slice(C_u, I_in[0])
+        plt.plot(Z[:, 0], Z[:, 1], 'k-')
+        Z = HelperFunctions.slice(T_star_u, I_in[0])
+        plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Trajectory Slice')
         
         plt.legend()
         plt.show()
