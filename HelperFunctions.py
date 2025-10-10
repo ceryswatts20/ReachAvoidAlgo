@@ -77,7 +77,7 @@ def load_parameters_from_file(filepath='parameters.txt'):
     Returns:
         np.ndarray: A 2D numpy array of states within the specified interval.    
 """
-def slice(states, interval: list) -> np.ndarray:
+def slice(states, interval: list):
     # Extract interval bounds
     x_end, x_start = interval
     
@@ -99,7 +99,37 @@ def slice(states, interval: list) -> np.ndarray:
         x2 = states(x1)
         # Combine x1 and x2 into a 2D array
         x = np.vstack((x1, x2)).T
-        # Append to Z
+        # Return points within the interval
         return x
+    # If states is a set
+    elif isinstance(states, set):
+        pts = []
+        for x in states:
+            # Is x is list/tuple like with 2 items
+            if isinstance(x, (list, tuple)) and len(x) == 2:
+                try:
+                    # Convert to float
+                    x1 = float(x[0])
+                    x2 = float(x[1])
+                    # Add to list
+                    pts.append([x1, x2])
+                # Is conversion fails
+                except (TypeError, ValueError):
+                    # Skip
+                    continue
+        # If pts is empty
+        if not pts:
+            # Return empty array
+            return np.empty((0, 2))
+        # Convert pts list to an array
+        arr = np.array(pts)
+        # Extract the first column
+        x1 = states[:, 0]
+        # Create a boolean mask:
+        # Condition 1: values in x1 are greater than or equal to x_start
+        # Condition 2: values in x1 are less than or equal to x_end
+        mask = (x1 >= x_start) & (x1 <= x_end)
+        # Return the subset of points whose x1 is within the interval as a set
+        return arr[mask]
     else:
         raise ValueError("The 'states' parameter must be either a list or a function.")

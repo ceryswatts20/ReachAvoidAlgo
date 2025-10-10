@@ -44,9 +44,10 @@ if __name__ == "__main__":
         roots = reach_calc.find_S_roots(x1_star)
         
         print("\n--- Generating Partition I ---")
-        tolerance = 1e-6
         # Initialize lists for intervals
-        I_in, I_out, I = reach_calc.generate_partition_I(roots, tolerance)
+        I_in, I_out, I = reach_calc.generate_partition_I(roots)
+        for interval in I:
+            print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
         
         print("\n--- Generating Target Set, X_T ---")
         xstar_u = 4
@@ -65,7 +66,7 @@ if __name__ == "__main__":
         
         # Stopping conditions:
         cross_x_axis = ReachabilityCalculator.event_x2_zero
-        cross_y_axis = ReachabilityCalculator.event_x1_zero
+        cross_y_axis = lambda t, x, x_target=0: ReachabilityCalculator.event_x1_cross(t, x, x_target)
         cross_Cu = lambda t, x, C_u=C_u: ReachabilityCalculator.event_Cu_cross(t, x, C_u)
         cross_Cl = lambda t, x, C_l=C_l: ReachabilityCalculator.event_Cl_cross(t, x, C_l)
         # Stop when any of these events occur
@@ -83,65 +84,78 @@ if __name__ == "__main__":
         dynamics_func_upper = lambda t, x, direction=direction, u=0: simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Solve ODE
         T_back_u = solve_ivp(dynamics_func_upper, t_span, x0_u, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
-        print(T_back_u.message)
+        
         # The last valid time before the event
         t_end = T_back_u.t[-1]
         # Create a dense time array for smooth plotting
         t_dense = np.linspace(T_back_u.t[0], t_end, 500)
         # Evaluate the solution at dense time points and transpose for easier plotting
         # T_star_u = array of (x1, x2) pairs along the trajectory
-        T_star_u = T_back_u.sol(t_dense).T
+        T_star_u_arr = T_back_u.sol(t_dense).T
+        # Convert from np.array to set
+        T_star_u = set(tuple(row) for row in T_star_u_arr)
         
         # Define the ode function for lower trajectory
         dynamics_func_lower = lambda t, x, direction=direction, u=1: simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Solve ODE
         T_back_l = solve_ivp(dynamics_func_lower, t_span, x0_l, method='RK45', events=[cross_x_axis, cross_y_axis, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
-        print(T_back_l.message)
+        
         # The last valid time before the event
         t_end = T_back_l.t[-1]
         # Create a dense time array for smooth plotting
         t_dense = np.linspace(T_back_l.t[0], t_end, 500)
         # Evaluate the solution at dense time points and transpose for easier plotting
         # T_star_l = array of (x1, x2) pairs along the trajectory
-        T_star_l = T_back_l.sol(t_dense).T
+        T_star_l_arr = T_back_l.sol(t_dense).T
+        # Convert from np.array to set()
+        T_star_l = set(tuple(row) for row in T_star_l_arr)
         
-        
-        # Find the index of the left most point in the trajectory (i.e., minimum x1)
-        min_index_u = np.argmin(T_star_u[:,0])
-        x_d = T_star_u[min_index_u]
+        # Find the left most point in the trajectory (i.e., minimum x1)
+        x_d = min(T_star_u, key=lambda point: point[0])
         print(f"Left most state in trajectory Tb(xstar_u, 0): {x_d[0]:.6f}, {x_d[1]:.6f}")
-        # Find the index of the left most point in the trajectory (i.e., minimum x1)
-        min_index_l = np.argmin(T_star_l[:,0])
-        x_a = T_star_l[min_index_l]
+        # Find the left most point in the trajectory (i.e., minimum x1)
+        x_a = min(T_star_l, key=lambda point: point[0])
         print(f"Left most state in trajectory Tb(xstar_l, 1): {x_a[0]:.6f}, {x_a[1]:.6f}")
         
-        print("\n--- Algorithm Logic ---")
-        Z_u = np.array([])
-        Z_l = np.array([])
+        print("\n--- Algorithm 1 ---")
+        # Initialize sets Z_u and Z_l
+        Z_u = set()
+        Z_l = set()
+        
         # If x_a and x_d are on the lower boundary
         if reach_calc.is_on_lower_boundary(x_a) and reach_calc.is_on_lower_boundary(x_d):
             print("Both x_a and x_d are on the lower boundary C_l.")
+            # Z_l = T_star_l and extended trajectory
+            Z_l = T_star_l.union(reach_calc.extend(C_l, x_d, x_a, 1))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif reach_calc.is_on_upper_boundary(x_a) and reach_calc.is_on_upper_boundary(x_d):
             print("Both x_a and x_d are on the upper boundary C_u.")
+            Z_u = T_star_u.union(reach_calc.extend(C_u, x_d, x_a, 0))
             Z_l = T_star_l
         else:
             print("x_a and x_d are on different boundaries.")
             # If x_a is on the lower boundary
             if reach_calc.is_on_lower_boundary(x_a):
                 print("x_a is on the lower boundary C_l.")
+                Z_l = T_star_l.union(reach_calc.extend(C_l, [0, 0], x_a, 1))
             else:
-                print("x_a is not on the lower boundary C_u.")
+                print("x_a is not on the lower boundary C_l.")
                 Z_l = T_star_l
             
-            # If x_d is on the lower boundary
+            # If x_d is on the upper boundary
             if reach_calc.is_on_upper_boundary(x_d):
-                print("x_d is on the upper boundary C_l.")
+                print("x_d is on the upper boundary C_u.")
+                Z_u = T_star_u.union(reach_calc.extend(C_u, [0, 0], x_d, 0))
             else:
                 print("x_d is not on the upper boundary C_u.")
                 Z_u = T_star_u
         
+        R_X_T = Z_u.intersection(Z_l)
+        # Convert sets to lists for easier plotting
+        T_star_l = sorted(list(T_star_l))
+        T_star_l = sorted(list(T_star_l))
+        R_X_T = sorted(list(R_X_T))
         
         # Plot results
         plt.figure(figsize=(10, 5))
@@ -151,8 +165,10 @@ if __name__ == "__main__":
         plt.grid()
         
         # Plot the upper and lower boundary sets
-        # plt.plot(x1_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
-        # plt.plot(x1_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
+        if False:
+            plt.plot(x1_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
+            plt.plot(x1_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
+        
         # Create a finer set of x1-values for a smoother plot
         x1_fine = np.linspace(0, 1, 500)
         # Plot upper and lower boundary functions
@@ -164,19 +180,64 @@ if __name__ == "__main__":
         plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
-        plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
-        plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
+        # T_star_u_x1 = [point[0] for point in T_star_u]
+        # T_star_u_x2 = [point[1] for point in T_star_u]
+        # plt.plot([point[0] for point in T_star_u], [point[1] for point in T_star_u], 'c-', label='Trajectory, $T^*_u$')
+        # plt.plot([point[0] for point in T_star_l], [point[1] for point in T_star_l], 'y-', label='Trajectory, $T^*_l$')
+        plt.plot(T_star_u_arr[:, 0], T_star_u_arr[:, 1], 'c-', label='Trajectory, $T^*_u$')
+        plt.plot(T_star_l_arr[:, 0], T_star_l_arr[:, 1], 'y-', label='Trajectory, $T^*_l$')
+        
         # Plot x_d
         plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
         # Plot x_a
         plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
         
-        Z = HelperFunctions.slice(C_u, I_in[0])
-        plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Test Slice')
-        Z = HelperFunctions.slice(C_u, I_in[0])
-        plt.plot(Z[:, 0], Z[:, 1], 'k-')
-        Z = HelperFunctions.slice(T_star_u, I_in[0])
-        plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Trajectory Slice')
+        # Z = HelperFunctions.slice(C_u, I_in[0])
+        # plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Test Slice')
+        # Z = HelperFunctions.slice(C_u, I_in[0])
+        # plt.plot(Z[:, 0], Z[:, 1], 'k-')
+        # Z = HelperFunctions.slice(T_star_u, I_in[0])
+        # plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Trajectory Slice')
+        
+        # Plot intervals
+        if True:
+            # If any roots were found
+            if roots:
+                # Draw the vertical lines from y=0 up to the C_u curve
+                plt.vlines(x=roots, ymin=0, ymax=C_u(np.array(roots)), colors='green', linestyles='solid', label='Roots of $S(x)$')
+            
+            # Shade the intervals
+            for i, interval in enumerate(I_in):
+                # Extract the start and end of the interval
+                x1_start = interval[1]
+                x1_end = interval[0]
+        
+                # Create a mask for the x1-values within the interval
+                mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
+                
+                if i == 0:
+                    label = '$S(x) \leq 0$'
+                else:
+                    label = ''
+        
+                # Fill the region between C_l and C_u for the interval
+                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine),where=mask, color='lightgreen', alpha=0.3, label=label)
+            
+            for i, interval in enumerate(I_out):
+                # Extract the start and end of the interval
+                x1_start = interval[1]
+                x1_end = interval[0]
+        
+                # Create a mask for the x1-values within the interval
+                mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
+                
+                if i == 0:
+                    label = '$S(x) > 0$'
+                else:
+                    label = ''
+        
+                # Fill the region between C_l and C_u for the interval
+                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine), where=mask, color='lightcoral', alpha=0.3, label=label)
         
         plt.legend()
         plt.show()
