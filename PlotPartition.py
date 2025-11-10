@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
         print("\nCalculating Velocity Limit Curve (V_u)...")
         # Lots of x1 values
-        x1_star = np.linspace(0, 1, 101)
+        x1_star = np.linspace(0, 1, 401)
         initial_guess = 30.0
         # Calculate the upper boundary
         V_u = simulator.calculate_upper_boundary(x1_star, initial_guess)
@@ -33,10 +33,30 @@ if __name__ == "__main__":
         V_l = np.zeros_like(V_u)
         
         print("\nCreating computable functions C_u(x1) and C_l(x1)...")
-        poly_degree = 10
+        poly_degree = 6
         C_u, C_u_coeffs = Simulator.create_constrained_polynomial(x1_star, V_u, degree=poly_degree)
+        C_u_coeffs = np.flip(C_u_coeffs)
         C_l = lambda x1: np.zeros_like(x1)
         C_l_coeffs = np.zeros(poly_degree + 1)
+        
+        # Derivative of Cu (check this)
+        print(f"Cu coefficients: {C_u_coeffs}")
+        Cu_dervi_coeffs = [C_u_coeffs[i] * i for i in range(1, len(C_u_coeffs))]
+        print(f"Cu derivative coefficients: {Cu_dervi_coeffs}")
+        # Values of Cu derivative at x1_star
+        Cu_deriv_values = np.polyval(np.flip(Cu_dervi_coeffs), x1_star)
+        # Detect rough approx. maximum 
+        x1_maximizer_approx = np.max(np.abs(Cu_deriv_values))
+        # Refinement step (use an optimiser to find L (todo)
+        sadety_diff = x1_maximizer_approx * (x1_star[1] - x1_star[0]) / 2
+        print(f"Safety margin: {sadety_diff}")
+        
+        plt.plot(x1_star, Cu_deriv_values)
+        plt.grid()
+        plt.show()
+        
+        C_u_coeffs = np.flip(C_u_coeffs)
+        
 
         print("\n--- Finding roots of S(x) on the boundaries ---")
         reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs, C_l_coeffs)
@@ -81,7 +101,7 @@ if __name__ == "__main__":
         # Create a finer set of x1-values for a smoother plot
         x1_fine = np.linspace(0, 1, 500)
         # Plot the upper and lower boundart functions C_u and C_l
-        plt.plot(x1_fine, C_u(x1_fine), 'r--', label='Upper Boundary Function, $C_u(x1)$')
+        plt.plot(x1_fine, C_u(x1_fine) - sadety_diff, 'r--', label='Upper Boundary Function, $C_u(x1)$')
         plt.plot(x1_fine, C_l(x1_fine), 'm--', label='Lower Boundary Function, $C_l(x1)$')
         
         # If any roots were found

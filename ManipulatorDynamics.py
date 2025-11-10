@@ -27,6 +27,7 @@ class ManipulatorDynamics:
         
         m1, m2 = self.m
         L1, L2 = self.L
+        # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
         q1, q2 = q[0, 0], q[1, 0]
 
         M11 = m1 * L1**2 + m2 * (L1**2 + 2 * L1 * L2 * math.cos(q2) + L2**2)
@@ -44,7 +45,9 @@ class ManipulatorDynamics:
         
         _, m2 = self.m
         L1, L2 = self.L
+        # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
         q1, q2 = q[0, 0], q[1, 0]
+        # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
         qdot1, qdot2 = qdot[0, 0], qdot[1, 0]
 
         c1 = -m2 * L1 * L2 * math.sin(q2) * (2 * qdot1 * qdot2 + qdot2**2)
@@ -58,6 +61,7 @@ class ManipulatorDynamics:
     def _gravitational_vector_2_rev(self, q: np.ndarray) -> np.ndarray:
         m1, m2 = self.m
         L1, L2 = self.L
+        # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
         q1, q2 = q[0, 0], q[1, 0]
         g = self.GRAVITATIONAL_CONSTANT
 

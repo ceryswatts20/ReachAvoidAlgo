@@ -74,8 +74,7 @@ def load_parameters_from_file(filepath='parameters.txt'):
         states (2D array or function): Either a 2D numpy array of states (each row is a state with two components) or a function that takes a numpy array of x1 values and returns corresponding x2 values.
         interval (list): A list with two elements [x_end, x_start] defining the interval to slice.
     
-    Returns:
-        np.ndarray: A 2D numpy array of states within the specified interval.    
+    Returns:  
 """
 def slice(states, interval: list):
     # Extract interval bounds

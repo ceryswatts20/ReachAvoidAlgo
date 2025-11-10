@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from scipy.interpolate import interp1d
 
 from ManipulatorDynamics import ManipulatorDynamics
 from Simulator import Simulator
@@ -112,10 +113,10 @@ if __name__ == "__main__":
         
         # Find the left most point in the trajectory (i.e., minimum x1)
         x_d = min(T_star_u, key=lambda point: point[0])
-        print(f"Left most state in trajectory Tb(xstar_u, 0): {x_d[0]:.6f}, {x_d[1]:.6f}")
+        print(f"x_d: {x_d[0]:.6f}, {x_d[1]:.6f}")
         # Find the left most point in the trajectory (i.e., minimum x1)
         x_a = min(T_star_l, key=lambda point: point[0])
-        print(f"Left most state in trajectory Tb(xstar_l, 1): {x_a[0]:.6f}, {x_a[1]:.6f}")
+        print(f"x_a: {x_a[0]:.6f}, {x_a[1]:.6f}")
         
         print("\n--- Algorithm 1 ---")
         # Initialize sets Z_u and Z_l
@@ -151,11 +152,13 @@ if __name__ == "__main__":
                 print("x_d is not on the upper boundary C_u.")
                 Z_u = T_star_u
         
-        R_X_T = Z_u.intersection(Z_l)
-        # Convert sets to lists for easier plotting
-        T_star_l = sorted(list(T_star_l))
-        T_star_l = sorted(list(T_star_l))
-        R_X_T = sorted(list(R_X_T))
+        
+        R_X_T = Z_l.intersection(Z_u)
+        # Convert sets to arrays for easier plotting
+        T_star_u = np.array(sorted(list(T_star_u)))
+        T_star_l = np.array(sorted(list(T_star_l)))
+        Z_u_arr = np.array(sorted(list(Z_u)))
+        Z_l_arr = np.array(sorted(list(Z_l)))
         
         # Plot results
         plt.figure(figsize=(10, 5))
@@ -180,24 +183,41 @@ if __name__ == "__main__":
         plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
-        # T_star_u_x1 = [point[0] for point in T_star_u]
-        # T_star_u_x2 = [point[1] for point in T_star_u]
-        # plt.plot([point[0] for point in T_star_u], [point[1] for point in T_star_u], 'c-', label='Trajectory, $T^*_u$')
-        # plt.plot([point[0] for point in T_star_l], [point[1] for point in T_star_l], 'y-', label='Trajectory, $T^*_l$')
-        plt.plot(T_star_u_arr[:, 0], T_star_u_arr[:, 1], 'c-', label='Trajectory, $T^*_u$')
-        plt.plot(T_star_l_arr[:, 0], T_star_l_arr[:, 1], 'y-', label='Trajectory, $T^*_l$')
+        plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
+        plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
         
         # Plot x_d
         plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
         # Plot x_a
         plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
         
-        # Z = HelperFunctions.slice(C_u, I_in[0])
-        # plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Test Slice')
-        # Z = HelperFunctions.slice(C_u, I_in[0])
-        # plt.plot(Z[:, 0], Z[:, 1], 'k-')
-        # Z = HelperFunctions.slice(T_star_u, I_in[0])
-        # plt.plot(Z[:, 0], Z[:, 1], 'k-', label='Trajectory Slice')
+        # Plot Reach-Avoid Set
+        # Extract x and y coordinates
+        x1_Z_u = Z_u_arr[:, 0]
+        x2_Z_u = Z_u_arr[:, 1]
+        x1_Z_l = Z_l_arr[:, 0]
+        x2_Z_l = Z_l_arr[:, 1]
+        
+        # Create a combined, sorted set of unique x-values from both boundaries
+        # that fall within our desired shading range.
+        x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
+        # Filter x_vals to only include values within the shading range
+        x_vals_filtered = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
+        # Create interpolation functions
+        f_u = interp1d(x1_Z_u, x2_Z_u, kind='linear', fill_value='extrapolate')
+        f_l = interp1d(x1_Z_l, x2_Z_l, kind='linear', fill_value='extrapolate')
+        # Get interpolated y-values on the common, filtered x-axis
+        x2_Z_u_interp = f_u(x_vals_filtered)
+        x2_Z_l_interp = f_l(x_vals_filtered)
+
+        # Plot the original upper and lower boundary points
+        plt.plot(Z_l_arr[:, 0], Z_l_arr[:, 1], 'b', label='$Z_l$')
+        plt.plot(Z_u_arr[:, 0], Z_u_arr[:, 1], 'r', label='$Z_u$')
+        # Plot the interpolated lines (optional, but shows what fill_between is using)
+        plt.plot(x_vals_filtered, x2_Z_u_interp, 'r--', linewidth=1, label='Interpolated $Z_u$')
+        plt.plot(x_vals_filtered, x2_Z_l_interp, 'b--', linewidth=1, label='Interpolated $Z_l$')
+        # Shade the area between the interpolated curves
+        plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='green', alpha=0.5, label='Shaded Region')
         
         # Plot intervals
         if True:
@@ -221,7 +241,7 @@ if __name__ == "__main__":
                     label = ''
         
                 # Fill the region between C_l and C_u for the interval
-                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine),where=mask, color='lightgreen', alpha=0.3, label=label)
+                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine),where=mask, color='lightgreen', alpha=0.1, label=label)
             
             for i, interval in enumerate(I_out):
                 # Extract the start and end of the interval
@@ -237,7 +257,7 @@ if __name__ == "__main__":
                     label = ''
         
                 # Fill the region between C_l and C_u for the interval
-                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine), where=mask, color='lightcoral', alpha=0.3, label=label)
+                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine), where=mask, color='lightcoral', alpha=0.1, label=label)
         
         plt.legend()
         plt.show()

@@ -153,7 +153,7 @@ class Simulator:
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(x1_data, degree + 1)
         
-        func = lambda c, A=A, v_data=v_data: np.sum((A @ c - v_data)**2)
+        func = lambda c, A=A, v_data=v_data: np.sum((v_data - A @ c)**2) + 0.0005 * np.linalg.norm(c)**2
 
         # Define the linear inequality constraints: A @ c <= v_data
         # This ensures the polynomial is always at or below the data points
@@ -167,8 +167,9 @@ class Simulator:
         lower_bound_constraint = LinearConstraint(A_lower, lb=0, ub=np.inf)
 
         # Use a simple unconstrained fit as the initial guess for the optimizer
-        c_initial = np.polyfit(x1_data, v_data, degree)
-
+        c_initial = np.zeros((degree + 1 ))#np.polyfit(x1_data, v_data, degree)
+        print(f"Initial polynomial coefficients: {c_initial}")
+        
         # Perform the constrained optimization
         result = minimize(func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
         
