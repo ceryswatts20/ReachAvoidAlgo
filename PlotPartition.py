@@ -47,6 +47,8 @@ if __name__ == "__main__":
         Cu_deriv_values = np.polyval(np.flip(Cu_dervi_coeffs), x1_star)
         # Detect rough approx. maximum 
         x1_maximizer_approx = np.max(np.abs(Cu_deriv_values))
+        print(f"Approximate maximum of |C_u'(x1)|: {x1_maximizer_approx}")
+        print(f"Lipschitz constant: {}")
         # Refinement step (use an optimiser to find L (todo)
         sadety_diff = x1_maximizer_approx * (x1_star[1] - x1_star[0]) / 2
         print(f"Safety margin: {sadety_diff}")
