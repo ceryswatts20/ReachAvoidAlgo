@@ -172,15 +172,17 @@ if __name__ == "__main__":
             plt.plot(x1_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
             plt.plot(x1_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
         
-        # Create a finer set of x1-values for a smoother plot
-        x1_fine = np.linspace(0, 1, 500)
         # Plot upper and lower boundary functions
-        plt.plot(x1_fine, C_u(x1_fine), 'r-', label='Upper Boundary Function, $C_u(x1)$')
-        plt.plot(x1_fine, C_l(x1_fine), 'm-', label='Lower Boundary Function, $C_l(x1)$')
-        # Plot targer set X_T
-        plt.vlines(X_T[0], X_T[1], X_T[2], colors='orange', label='Target Set, $X_T$')
-        plt.plot(X_T[0], xstar_u, 'ko', label='$x^*_u$')
-        plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
+        if False:
+            # Create a finer set of x1-values for a smoother plot
+            x1_fine = np.linspace(0, 1, 500)
+            
+            plt.plot(x1_fine, C_u(x1_fine), 'r-', label='Upper Boundary Function, $C_u(x1)$')
+            plt.plot(x1_fine, C_l(x1_fine), 'm-', label='Lower Boundary Function, $C_l(x1)$')
+            # Plot targer set X_T
+            plt.vlines(X_T[0], X_T[1], X_T[2], colors='orange', label='Target Set, $X_T$')
+            plt.plot(X_T[0], xstar_u, 'ko', label='$x^*_u$')
+            plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
         plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
@@ -220,7 +222,7 @@ if __name__ == "__main__":
         plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='green', alpha=0.5, label='Shaded Region')
         
         # Plot intervals
-        if True:
+        if False:
             # If any roots were found
             if roots:
                 # Draw the vertical lines from y=0 up to the C_u curve

@@ -37,6 +37,9 @@ class ManipulatorDynamics:
 
         return np.array([[M11, M12], [M21, M22]])
     
+    def _mass_matrix_2_rev_no_grav(self, q: np.ndarray) -> np.ndarray:
+        return self._mass_matrix_2_rev(q)
+    
     """
     Create the c vector containing the Coriolis and centripetal torques
     of a 2 Link, revolute joint robotic manipulator.
@@ -53,6 +56,21 @@ class ManipulatorDynamics:
         c1 = -m2 * L1 * L2 * math.sin(q2) * (2 * qdot1 * qdot2 + qdot2**2)
         c2 = m2 * L1 * L2 * qdot1**2 * math.sin(q2)
 
+        return np.array([[c1], [c2]])
+    
+    """
+    
+    """
+    def _inertia_matrix_2_rev_no_grav(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
+        _, m2 = self.m
+        L1, L2 = self.L
+        # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
+        q1, q2 = q[0, 0], q[1, 0]
+        qdot1, qdot2 = qdot[0, 0], qdot[1, 0]
+        
+        c1 = -m2 * L1 * L2 * math.sin(q2) * (2 * qdot1 * qdot2 + qdot2**2)
+        c2 = m2 * L1 * L2 * math.sin(q2) *(qdot1**2 + qdot1 * qdot2)
+        
         return np.array([[c1], [c2]])
 
     """
@@ -74,7 +92,7 @@ class ManipulatorDynamics:
     Generates the path-parameterized Lagrangian dynamics for the 2 Link manipulator with revolute joints.
     """
     def get_2_rev_dynamics(self, s: float, sdot: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        
+        # Paramterized joint positions and velocities
         q_s_dot_path = self.q_end - self.q_start
         q_s = self.q_start + s * q_s_dot_path
         qdot = q_s_dot_path * sdot
@@ -86,5 +104,20 @@ class ManipulatorDynamics:
         m_s = M @ q_s_dot_path
         c_s = c
         g_s = g
+
+        return m_s, c_s, g_s
+    
+    def get_2_rev_dynamics_no_grav(self, s: float, sdot: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        
+        q_s_dot_path = self.q_end - self.q_start
+        q_s = self.q_start + s * q_s_dot_path
+        qdot = q_s_dot_path * sdot
+
+        M = self._mass_matrix_2_rev_no_grav(q_s)
+        c = self._inertia_matrix_2_rev_no_grav(q_s, qdot)
+
+        m_s = M @ q_s_dot_path
+        c_s = c
+        g_s = np.zeros((2, 1))
 
         return m_s, c_s, g_s
