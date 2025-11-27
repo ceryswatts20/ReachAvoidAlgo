@@ -132,3 +132,63 @@ def slice(states, interval: list):
         return arr[mask]
     else:
         raise ValueError("The 'states' parameter must be either a list or a function.")
+    
+    
+"""
+    Numerically checks if a path q(s) is Lipschitz continuous for s = [0, 1] and returns the Lipschitz constant if found.
+    Assumes the path itself is continuously differentiable.
+    The method finds the maximum of the norm of the path derivative over the interval by sampling. If this supremum is finite, the path is Lipschitz continuous.
+
+    Args:
+        q_s (callable): A function `q(s)` that takes a scalar `s` and returns a NumPy array (the joint configuration vector)
+        num_samples (int): The number of samples to take within the interval to approximate the maximum of the derivative's norm.
+        diff_h (float): Step size for numerical derivative approximation.
+        tolerance (float): Tolerance for comparing values (e.g., if a derivative appears unbounded due to numerical instability).
+
+    Returns:
+        tuple: (is_lipschitz_continuous, lipschitz_constant)
+            - is_lipschitz_continuous (bool): True if the path derivative's norm is bounded (and thus Lipschitz), False otherwise.
+            - lipschitz_constant (float or None): The estimated Lipschitz constant (maximum of ||q'(s)||) if Lipschitz, else None.
+"""
+def is_lipschitz_continuous(q_s, num_samples=1000, diff_h=1e-6, tol=1e-9) -> tuple[bool, float | None]:
+    if num_samples < 2:
+        raise ValueError("num_samples must be at least 2.")
+
+    # Numerical Derivative Function for q(s)
+    # Computes q'(s) using central difference
+    def dq_ds(s_val):
+        q_plus_h = q_s(s_val + diff_h)
+        q_minus_h = q_s(s_val - diff_h)
+        return (q_plus_h - q_minus_h) / (2 * diff_h)
+    
+
+    # 3. Sample the interval to find the maximum derivative norm
+    s_values = np.linspace(0, 1, num_samples)
+    norms = []
+
+    for s in s_values:
+        try:
+            # Calculate the Euclidean (L2) norm of the derivative vector
+            norm_val = np.linalg.norm(dq_ds(s))
+            norms.append(norm_val)
+
+            # Early exit if a very large value is encountered, suggesting unboundedness
+            if norm_val > 1e12: # Arbitrary large number to catch potential "infinity"
+                return False, None
+        except Exception as e:
+            print(f"Error evaluating path at s={s}: {e}")
+            # If the derivative function fails, we can't guarantee Lipschitz
+            return False, None
+
+    # Check if all norms are finite (not NaN or Inf)
+    if not np.all(np.isfinite(norms)):
+        return False, None
+
+    # The Lipschitz constant is the max derivative norm
+    lipschitz_constant = np.max(norms)
+
+    # If the max norm is extremely large, it's numerically effectively unbounded
+    if lipschitz_constant > 1e10: # Another arbitrary threshold for practical "unboundedness"
+        return False, None
+
+    return True, lipschitz_constant
