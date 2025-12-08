@@ -5,51 +5,71 @@ def load_parameters_from_file(filepath='parameters.txt'):
     # Dictionary to hold extracted parameters
     parameters = {}
     current_key = None
-    # Map comment headers to parameter keys
+    current_key_info = None
+    # Map comment headers to parameter keys and indicate their expected type
     key_map = {
-        "Min joint torques": "min_torques",
-        "Max joint torques": "max_torques",
-        "Path start point": "q_start_deg",
-        "Path end point": "q_end_deg",
-        "2 DOF link masses": "m",
-        "2 DOF link lengths": "L",
+        "Robot Type": {"key": "robot_type", "type": "text"},
+        "Min joint torques": {"key": "min_torques", "type": "float_array"},
+        "Max joint torques": {"key": "max_torques", "type": "float_array"},
+        "Path start point": {"key": "q_start_deg", "type": "float_array"},
+        "Path end point": "q_end_deg", # This will default to float_array
+        "2 DOF link masses": {"key": "m", "type": "float_array"},
+        "2 DOF link lengths": {"key": "L", "type": "float_array"},
     }
+    
     try:
         with open(filepath, 'r') as f:
+            lines = f.readlines()
+            line_iter = iter(lines)
             # For each line in the file
-            for line in f:
+            for line in line_iter:
                 # Strip whitespace
                 line = line.strip()
                 # If the line is not empty or is a comment
                 if not line or line.startswith('%'):
-                    # Removes the '%' and any leading/trailing whitespace
                     header_text = line.lstrip('%').strip()
-                    # Check if this header is one we care about i.e., in key_map
                     if header_text in key_map:
-                        # Set the current key to the corresponding parameter name
-                        current_key = key_map[header_text]
+                        # Get the key and its type info
+                        info = key_map[header_text]
+                        if isinstance(info, dict):
+                            current_key = info["key"]
+                            current_key_info = info # Store the full info dict
+                        else: # If it's just a string, assume float_array type (default behavior)
+                            current_key = info
+                            current_key_info = {"key": info, "type": "float_array"} # Default
                     continue
                 # If we have a current key
                 if current_key:
                     try:
-                        # Convert the line into a numpy array of floats
-                        values = np.array([float(val.strip()) for val in line.split(',')])
-                        # Store the values in the parameters dictionary
-                        parameters[current_key] = values
-                        # Reset current_key
+                        if current_key_info and current_key_info["type"] == "text":
+                            # For text parameters, just store the line as a string
+                            parameters[current_key] = line
+                        elif current_key_info and current_key_info["type"] == "float_array":
+                            # For float arrays, convert and store
+                            values = np.array([float(val.strip()) for val in line.split(',')])
+                            parameters[current_key] = values
+                        else:
+                            # Fallback if type isn't specified, assume float_array
+                            values = np.array([float(val.strip()) for val in line.split(',')])
+                            parameters[current_key] = values
+
+                        # Reset current key state after successfully parsing
                         current_key = None
+                        current_key_info = None
                     except ValueError:
-                        print(f"Warning: Could not parse values for '{current_key}' from line: '{line}'")
+                        print(f"Warning: Could not parse values for '{current_key}' from line: '{line}'. Skipping.")
                         current_key = None
+                        current_key_info = None
                 else:
                     print(f"Warning: Data line '{line}' found without a preceding header comment. Skipping.")
         
         # Check if all required parameters are present
-        required_keys = ["m", "L", "q_start_deg", "q_end_deg", "min_torques", "max_torques"]
+        required_keys = ["robot_type", "m", "L", "q_start_deg", "q_end_deg", "min_torques", "max_torques"]
         for key in required_keys:
             if key not in parameters:
                 raise ValueError(f"Missing required parameter: '{key}' in '{filepath}'")
-
+        
+        robot_type = parameters["robot_type"]
         m = parameters["m"]
         L = parameters["L"]
         # Convert degrees to radians for joint angles
@@ -58,7 +78,7 @@ def load_parameters_from_file(filepath='parameters.txt'):
         min_tau = parameters["min_torques"]
         max_tau = parameters["max_torques"]
 
-        return m, L, q_start_rad, q_end_rad, min_tau, max_tau
+        return robot_type, m, L, q_start_rad, q_end_rad, min_tau, max_tau
     except FileNotFoundError:
         print(f"Error: The file '{filepath}' was not found. Please ensure it exists.")
         raise
@@ -137,10 +157,10 @@ def slice(states, interval: list):
 """
     Numerically checks if a path q(s) is Lipschitz continuous for s = [0, 1] and returns the Lipschitz constant if found.
     Assumes the path itself is continuously differentiable.
-    The method finds the maximum of the norm of the path derivative over the interval by sampling. If this supremum is finite, the path is Lipschitz continuous.
+    The method finds the supremum of the norm of the path derivative over the interval by sampling. If this supremum is finite, the path is Lipschitz continuous.
 
     Args:
-        q_s (callable): A function `q(s)` that takes a scalar `s` and returns a NumPy array (the joint configuration vector)
+        q_s (callable): A function that takes a scalar and returns a NumPy array (the joint configuration vector)
         num_samples (int): The number of samples to take within the interval to approximate the maximum of the derivative's norm.
         diff_h (float): Step size for numerical derivative approximation.
         tolerance (float): Tolerance for comparing values (e.g., if a derivative appears unbounded due to numerical instability).

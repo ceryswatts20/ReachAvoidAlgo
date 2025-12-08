@@ -1,3 +1,6 @@
+% Robot Type
+2rev_no_g
+
 % Min joint torques
 -900, -800
 % Max joint torques

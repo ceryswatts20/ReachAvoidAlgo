@@ -12,16 +12,17 @@ class ManipulatorDynamics:
     Initializes the ManipulatorDynamics class with link masses, lengths,
     and start/end joint angles in radians.
     """
-    def __init__(self, m, L, q_start_rad, q_end_rad):
+    def __init__(self, m, L, q_start_rad, q_end_rad, type_of_dynamics):
         
         self.m = m
         self.L = L
         # Ensure q_start and q_end are column vectors
         self.q_start = q_start_rad.reshape(-1, 1)
         self.q_end = q_end_rad.reshape(-1, 1)
+        self.type_of_dynamics = type_of_dynamics
         
     """
-    Creates the mass matrix for a 2 Link, revolute joint robotic manipulator.
+    Creates the mass matrix for a 2 Link, revolute joint robotic manipulator with gravity acting on the plane of motion.
     """
     def _mass_matrix_2_rev(self, q: np.ndarray) -> np.ndarray:
         
@@ -42,7 +43,7 @@ class ManipulatorDynamics:
     
     """
     Create the c vector containing the Coriolis and centripetal torques
-    of a 2 Link, revolute joint robotic manipulator.
+    of a 2 Link, revolute joint robotic manipulator with gravity acting on the plane of motion.
     """
     def _c_vector_2_rev(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
         
@@ -61,7 +62,7 @@ class ManipulatorDynamics:
     """
     
     """
-    def _inertia_matrix_2_rev_no_grav(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
+    def _c_vector_2_rev_no_grav(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
         _, m2 = self.m
         L1, L2 = self.L
         # q1 = 1st row, 1st column; q2 = 2nd row, 1st column
@@ -96,28 +97,20 @@ class ManipulatorDynamics:
         q_s_dot_path = self.q_end - self.q_start
         q_s = self.q_start + s * q_s_dot_path
         qdot = q_s_dot_path * sdot
-
-        M = self._mass_matrix_2_rev(q_s)
-        c = self._c_vector_2_rev(q_s, qdot)
-        g = self._gravitational_vector_2_rev(q_s)
+        
+        if self.type_of_dynamics == '2rev_no_g':
+            M = self._mass_matrix_2_rev_no_grav(q_s)
+            c = self._c_vector_2_rev_no_grav(q_s, qdot)
+            g = np.zeros((2, 1))
+        elif self.type_of_dynamics == '2rev_g':
+            M = self._mass_matrix_2_rev(q_s)
+            c = self._c_vector_2_rev(q_s, qdot)
+            g = self._gravitational_vector_2_rev(q_s)
+        else:
+            raise ValueError(f"Unknown dynamics type: {self.type_of_dynamics}")
 
         m_s = M @ q_s_dot_path
         c_s = c
         g_s = g
-
-        return m_s, c_s, g_s
-    
-    def get_2_rev_dynamics_no_grav(self, s: float, sdot: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        
-        q_s_dot_path = self.q_end - self.q_start
-        q_s = self.q_start + s * q_s_dot_path
-        qdot = q_s_dot_path * sdot
-
-        M = self._mass_matrix_2_rev_no_grav(q_s)
-        c = self._inertia_matrix_2_rev_no_grav(q_s, qdot)
-
-        m_s = M @ q_s_dot_path
-        c_s = c
-        g_s = np.zeros((2, 1))
 
         return m_s, c_s, g_s

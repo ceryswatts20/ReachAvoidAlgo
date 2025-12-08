@@ -1,5 +1,15 @@
+import sys
+import os
 import numpy as np
 import matplotlib.pyplot as plt
+
+# Get the absolute path of this script's directory (Plots/)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the absolute path of the project root directory (ReachAvoidAlgo/)
+# Goes up one level from 'scripts/'
+project_root_dir = os.path.dirname(current_dir)
+# Add the project root directory to sys.path
+sys.path.insert(0, project_root_dir)
 
 from ManipulatorDynamics import ManipulatorDynamics
 from Simulator import Simulator
@@ -9,18 +19,19 @@ import HelperFunctions
 if __name__ == "__main__":
     try:
         # Load all parameters
-        m, L, q_start, q_end, min_tau_loaded, max_tau_loaded = HelperFunctions.load_parameters_from_file('parameters.txt')
+        robot_type, m, L, q_start, q_end, min_tau_loaded, max_tau_loaded = HelperFunctions.load_parameters_from_file('parameters.txt')
 
         print("\n--- Loaded Parameters ---")
+        print("Robot Type:", robot_type)
         print("Masses (m):", m)
         print("Lengths (L):", L)
         print("Path Start (q_start_rad):", q_start)
         print("Path End (q_end_rad):", q_end)
-        print("Min Torques (min_tau):", min_tau_loaded)
+        print("Min Torques (min_tau):", min_tau_loaded) 
         print("Max Torques (max_tau):", max_tau_loaded)
 
         # --- Initialize Dynamics and Simulation ---
-        robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end)
+        robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
 
         print("\nCalculating Velocity Limit Curve (V_u)...")
@@ -48,10 +59,17 @@ if __name__ == "__main__":
         # Detect rough approx. maximum 
         x1_maximizer_approx = np.max(np.abs(Cu_deriv_values))
         print(f"Approximate maximum of |C_u'(x1)|: {x1_maximizer_approx}")
-        print(f"Lipschitz constant: {}")
+        
+        q_s_dot_path = q_end - q_start
+        q_s = lambda s: q_start + s * q_s_dot_path
+        lipschitz = HelperFunctions.is_lipschitz_continuous(q_s)
+        
+        if lipschitz[0]:
+            print(f"The path is Lipschitz continuous with constant L = {lipschitz[1]:.4f}")
         # Refinement step (use an optimiser to find L (todo)
         sadety_diff = x1_maximizer_approx * (x1_star[1] - x1_star[0]) / 2
-        print(f"Safety margin: {sadety_diff}")
+        safety_diff = lipschitz[1]* (x1_star[1] - x1_star[0]) / 2
+        print(f"Safety margin: {safety_diff}")
         
         plt.plot(x1_star, Cu_deriv_values)
         plt.grid()
@@ -103,7 +121,8 @@ if __name__ == "__main__":
         # Create a finer set of x1-values for a smoother plot
         x1_fine = np.linspace(0, 1, 500)
         # Plot the upper and lower boundart functions C_u and C_l
-        plt.plot(x1_fine, C_u(x1_fine) - sadety_diff, 'r--', label='Upper Boundary Function, $C_u(x1)$')
+        plt.plot(x1_fine, C_u(x1_fine) - safety_diff, 'r--', label='Upper Boundary Function, $C_u(x1)$')
+        plt.plot(x1_fine, C_u(x1_fine) - sadety_diff, 'g--', label='Upper Boundary Function, $C_u(x1)$')
         plt.plot(x1_fine, C_l(x1_fine), 'm--', label='Lower Boundary Function, $C_l(x1)$')
         
         # If any roots were found

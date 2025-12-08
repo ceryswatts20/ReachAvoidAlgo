@@ -11,9 +11,10 @@ import HelperFunctions
 if __name__ == "__main__":
     try:
         # Load all parameters
-        m, L, q_start, q_end, min_tau_loaded, max_tau_loaded = HelperFunctions.load_parameters_from_file('parameters.txt')
+        robot_type, m, L, q_start, q_end, min_tau_loaded, max_tau_loaded = HelperFunctions.load_parameters_from_file('parameters.txt')
 
         print("\n--- Loaded Parameters ---")
+        print("Robot Type:", robot_type)
         print("Masses (m):", m)
         print("Lengths (L):", L)
         print("Path Start (q_start_rad):", q_start)
@@ -22,7 +23,7 @@ if __name__ == "__main__":
         print("Max Torques (max_tau):", max_tau_loaded)
 
         # --- Initialize Dynamics and Simulation ---
-        robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end)
+        robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
 
         print("\nCalculating Velocity Limit Curve (V_u)...")
@@ -168,10 +169,11 @@ if __name__ == "__main__":
         plt.grid()
         
         # Plot the upper and lower boundary sets
-        if False:
+        if True:
             plt.plot(x1_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
             plt.plot(x1_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
         
+
         # Plot upper and lower boundary functions
         if False:
             # Create a finer set of x1-values for a smoother plot
@@ -185,13 +187,14 @@ if __name__ == "__main__":
             plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
-        plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
-        plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
-        
-        # Plot x_d
-        plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
-        # Plot x_a
-        plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
+        if False:
+            plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
+            plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
+            
+            # Plot x_d
+            plt.plot(x_d[0], x_d[1], 'ks', label='$x_d$')
+            # Plot x_a
+            plt.plot(x_a[0], x_a[1], 'k^', label='$x_a$')
         
         # Plot Reach-Avoid Set
         # Extract x and y coordinates
@@ -219,7 +222,7 @@ if __name__ == "__main__":
         plt.plot(x_vals_filtered, x2_Z_u_interp, 'r--', linewidth=1, label='Interpolated $Z_u$')
         plt.plot(x_vals_filtered, x2_Z_l_interp, 'b--', linewidth=1, label='Interpolated $Z_l$')
         # Shade the area between the interpolated curves
-        plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='green', alpha=0.5, label='Shaded Region')
+        plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='gray', alpha=0.75, label='Shaded Region')
         
         # Plot intervals
         if False:

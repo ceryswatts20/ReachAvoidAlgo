@@ -33,6 +33,7 @@ class Simulator:
     def get_accel_bounds(self, x1: float, x2: float) -> tuple[float, float]:
         lower_joint_accels = np.zeros(2)
         upper_joint_accels = np.zeros(2)
+        
         m_s, c_s, g_s = self.dynamics.get_2_rev_dynamics(x1, x2)
         
         for i in range(2):
