@@ -20,3 +20,4 @@ htmlcov/
 
 # VS Code
 .vscode/ # VS Code specific settings for this workspace
+.vscode/settings.json
