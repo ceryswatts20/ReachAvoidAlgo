@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<robot name="two_link_planar">
+  <link name="base_link">
+    <inertial>
+      <mass value="0.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0" iyy="0" izz="0" />
+    </inertial>
+  </link>
+
+  <link name="link1">
+    <visual>
+      <origin xyz="0.5 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="1.0 0.05 0.05"/>
+      </geometry>
+      <material name="red"><color rgba="1 0 0 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0.5 0 0"/>
+      <geometry><box size="1.0 0.05 0.05"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" iyy="0.01" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/> <!-- rotate about z-axis -->
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="3"/>
+  </joint>
+
+  <link name="link2">
+    <visual>
+      <origin xyz="0.5 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="1.0 0.05 0.05"/>
+      </geometry>
+      <material name="blue"><color rgba="0 0 1 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0.5 0 0"/>
+      <geometry><box size="1.0 0.05 0.05"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" iyy="0.01" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="1.0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="3"/>
+  </joint>
+</robot>
