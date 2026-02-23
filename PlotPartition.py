@@ -66,7 +66,7 @@ if __name__ == "__main__":
         
         if lipschitz[0]:
             print(f"The path is Lipschitz continuous with constant L = {lipschitz[1]:.4f}")
-        # Refinement step (use an optimiser to find L (todo)
+        # Refinement step (use an optimiser to find L (todo))
         sadety_diff = x1_maximizer_approx * (x1_star[1] - x1_star[0]) / 2
         safety_diff = lipschitz[1]* (x1_star[1] - x1_star[0]) / 2
         print(f"Safety margin: {safety_diff}")
