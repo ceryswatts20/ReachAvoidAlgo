@@ -21,7 +21,21 @@ if __name__ == "__main__":
         print("Path End (q_end_rad):", q_end)
         print("Min Torques (min_tau):", min_tau_loaded)
         print("Max Torques (max_tau):", max_tau_loaded)
-
+        
+        print(f"\n--- Lipschitz Continuity Check ---")
+        # Path
+        q_s_dot_path = q_end - q_start
+        q_s = lambda s: q_start + s * q_s_dot_path
+        # Check Lipschitz continuity of the path
+        lipschitz = HelperFunctions.is_lipschitz_continuous(q_s)
+        # If the path is Lipschitz continuous, print the constant
+        if lipschitz[0]:
+            print(f"The path is Lipschitz continuous with constant L = {lipschitz[1]:.4f}")
+        else:
+            print("The path is not Lipschitz continuous.")
+            # Stop the program if the path is not Lipschitz continuous, as the algorithm relies on this property
+            exit(1)
+        
         # --- Initialize Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
@@ -38,11 +52,21 @@ if __name__ == "__main__":
         print("\nCreating computable functions C_u(x1) and C_l(x1)...")
         poly_degree = 10
         C_u, C_u_coeffs = Simulator.create_constrained_polynomial(x1_star, V_u, degree=poly_degree)
+        # Use the Lipschitz constant to calculate a safety margin that accounts for the gap between the polynomial approx and the true VLC. This is a conservative estimate of how much the function values could change between the sampled points, which helps ensure that our computed boundaries are safe.
+        safety_diff = lipschitz[1]* (x1_star[1] - x1_star[0]) / 2
+        print(f"Safety margin: {safety_diff}")
+        # Apply safety margin to coefficients
+        C_u_coeffs_adjusted = C_u_coeffs.copy()
+        C_u_coeffs_adjusted[-1] -= safety_diff
+        C_u = lambda x1: np.polyval(C_u_coeffs_adjusted, x1)
         C_l = lambda x1: np.zeros_like(x1)
         C_l_coeffs = np.zeros(poly_degree + 1)
         
+        print(f"Cu coefficients: {C_u_coeffs}")
+        print(f"Cu coefficients with safety margin: {C_u_coeffs_adjusted}")
+        
         print("\n--- Finding roots of S(x) on the boundaries ---")
-        reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs, C_l_coeffs)
+        reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs_adjusted, C_l_coeffs)
         roots = reach_calc.find_S_roots(x1_star)
         
         print("\n--- Generating Partition I ---")
@@ -169,25 +193,28 @@ if __name__ == "__main__":
         plt.grid()
         
         # Plot the upper and lower boundary sets
-        if True:
+        if False:
             plt.plot(x1_star, V_u, 'b-', label='Upper Boundary Set, $V_u$')
             plt.plot(x1_star, V_l, 'g-', label='Lower Boundary Set, $V_l$')
         
 
         # Plot upper and lower boundary functions
-        if False:
+        if True:
             # Create a finer set of x1-values for a smoother plot
             x1_fine = np.linspace(0, 1, 500)
             
             plt.plot(x1_fine, C_u(x1_fine), 'r-', label='Upper Boundary Function, $C_u(x1)$')
             plt.plot(x1_fine, C_l(x1_fine), 'm-', label='Lower Boundary Function, $C_l(x1)$')
+        
+        # Plot the target set X_T
+        if True:
             # Plot targer set X_T
             plt.vlines(X_T[0], X_T[1], X_T[2], colors='orange', label='Target Set, $X_T$')
             plt.plot(X_T[0], xstar_u, 'ko', label='$x^*_u$')
             plt.plot(X_T[0], xstar_l, 'ko', label='$x^*_l$')
         
         # Plot trajectories
-        if False:
+        if True:
             plt.plot(T_star_u[:, 0], T_star_u[:, 1], 'c-', label='Trajectory, $T^*_u$')
             plt.plot(T_star_l[:, 0], T_star_l[:, 1], 'y-', label='Trajectory, $T^*_l$')
             
@@ -219,10 +246,13 @@ if __name__ == "__main__":
         plt.plot(Z_l_arr[:, 0], Z_l_arr[:, 1], 'b', label='$Z_l$')
         plt.plot(Z_u_arr[:, 0], Z_u_arr[:, 1], 'r', label='$Z_u$')
         # Plot the interpolated lines (optional, but shows what fill_between is using)
-        plt.plot(x_vals_filtered, x2_Z_u_interp, 'r--', linewidth=1, label='Interpolated $Z_u$')
-        plt.plot(x_vals_filtered, x2_Z_l_interp, 'b--', linewidth=1, label='Interpolated $Z_l$')
+        
+        if False:
+            plt.plot(x_vals_filtered, x2_Z_u_interp, 'o--', linewidth=1, label='Interpolated $Z_u$')
+            plt.plot(x_vals_filtered, x2_Z_l_interp, 'g--', linewidth=1, label='Interpolated $Z_l$')
+            
         # Shade the area between the interpolated curves
-        plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='gray', alpha=0.75, label='Shaded Region')
+        plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='gray', alpha=0.75, label='$\mathcal{R(X}_T)$')
         
         # Plot intervals
         if False:
