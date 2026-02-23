@@ -20,6 +20,7 @@ cd "C:\Users\<YourName>\path\to\project\Robotic_Manipulator_Analysis"
 - This creates a folder called `.venv` inside your project, activates it and installs the required packages.
 
 #### Windows
+
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\activate
@@ -27,6 +28,7 @@ pip install -r requirements.txt
 ```
 
 #### Linux
+
 ```bash
 py -3.13 -m venv .venv
 source .venv\bin\activate
@@ -34,6 +36,7 @@ pip install -r requirements.txt
 ```
 
 ## Updating
+
 When installing new packages make sure to update the `requirements.txt` file by running in the terminal:
 
 ```python
