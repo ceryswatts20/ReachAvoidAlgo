@@ -15,7 +15,7 @@ class ReachAvoidSet:
     given a parameters file and a target set X_T.
     """
 
-    def __init__(self, params_file, debug=False):
+    def __init__(self, params_file, q_start: np.ndarray, q_end: np.ndarray, debug: bool):
         """
         Initialises the class by loading the system parameters and initilising the dynamics, simulator and reachability classes.
 
@@ -37,11 +37,14 @@ class ReachAvoidSet:
             self._robot_type,
             self._m,
             self._L,
-            self._q_start,
-            self._q_end,
+            _,
+            _,
             self._min_tau,
             self._max_tau,
         ) = HelperFunctions.load_parameters_from_file(params_file)
+        # Convert degrees to radians for joint angles
+        self._q_start = np.deg2rad(q_start)
+        self._q_end = np.deg2rad(q_end)
         
         if self._debug:
             print("\n--- Loaded Parameters ---")
@@ -405,13 +408,15 @@ class ReachAvoidSet:
 
 
 if __name__ == "__main__":
-    reachAvoidSet = ReachAvoidSet("parameters.txt", debug=True)
+    q_start = np.array([0, 0])
+    q_end = np.array([150, 90])
+    reachAvoidSet = ReachAvoidSet("parameters.txt", q_start, q_end, debug=True)
     
     X_T = [0.8, 0.05, 4]
     R_X_T = reachAvoidSet.compute(X_T)
     reachAvoidSet.plot(True, False, True)
     
-    X_T_2 = [1, 0, 3]
-    R_X_T_2 = reachAvoidSet.compute(X_T_2)
-    reachAvoidSet.plot(True, False, True)
+    # X_T_2 = [1, 0, 3]
+    # R_X_T_2 = reachAvoidSet.compute(X_T_2)
+    # reachAvoidSet.plot(True, False, True)
     
