@@ -13,7 +13,7 @@ from Simulator import Simulator
 class ReachabilityCalculator:
     
     """
-    Initializes the class
+    Initialises the class
 
     Args:
         C_u_func (callable): The upper velocity limit function C_u(s).
@@ -176,7 +176,7 @@ class ReachabilityCalculator:
         A tuple containing three lists: (I_in, I_out, I).
     """
     def generate_partition_I(self, roots: list, tolerance=1e-6) -> tuple[list, list, list]:
-        # Initialize lists for intervals
+        # Initialise lists for intervals
         I_in, I_out, I = [], [], []
         
         # Generate intervals from the roots
@@ -453,7 +453,7 @@ class ReachabilityCalculator:
                             if self.is_on_upper_boundary(state) or self.is_on_lower_boundary(state):
                                 # If intersection_pts is empty
                                 if intersection_pts.size == 0:
-                                    # Initialize array
+                                    # Initialise array
                                     intersection_pts = np.atleast_2d(state)
                                 # Save intersection point
                                 intersection_pts = np.vstack((intersection_pts, state))
