@@ -261,38 +261,38 @@ if __name__ == "__main__":
                 # Draw the vertical lines from y=0 up to the C_u curve
                 plt.vlines(x=roots, ymin=0, ymax=C_u(np.array(roots)), colors='green', linestyles='solid', label='Roots of $S(x)$')
             
-            # Shade the intervals
-            for i, interval in enumerate(I_in):
-                # Extract the start and end of the interval
-                x1_start = interval[1]
-                x1_end = interval[0]
-        
-                # Create a mask for the x1-values within the interval
-                mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
-                
-                if i == 0:
-                    label = '$S(x) \leq 0$'
-                else:
-                    label = ''
-        
-                # Fill the region between C_l and C_u for the interval
-                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine),where=mask, color='lightgreen', alpha=0.1, label=label)
+                # Shade the intervals
+                for i, interval in enumerate(I_in):
+                    # Extract the start and end of the interval
+                    x1_start = interval[1]
+                    x1_end = interval[0]
             
-            for i, interval in enumerate(I_out):
-                # Extract the start and end of the interval
-                x1_start = interval[1]
-                x1_end = interval[0]
-        
-                # Create a mask for the x1-values within the interval
-                mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
+                    # Create a mask for the x1-values within the interval
+                    mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
+                    
+                    if i == 0:
+                        label = '$S(x) \leq 0$'
+                    else:
+                        label = ''
+            
+                    # Fill the region between C_l and C_u for the interval
+                    plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine),where=mask, color='lightgreen', alpha=0.1, label=label)
                 
-                if i == 0:
-                    label = '$S(x) > 0$'
-                else:
-                    label = ''
-        
-                # Fill the region between C_l and C_u for the interval
-                plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine), where=mask, color='lightcoral', alpha=0.1, label=label)
+                for i, interval in enumerate(I_out):
+                    # Extract the start and end of the interval
+                    x1_start = interval[1]
+                    x1_end = interval[0]
+            
+                    # Create a mask for the x1-values within the interval
+                    mask = (x1_fine >= x1_start) & (x1_fine <= x1_end)
+                    
+                    if i == 0:
+                        label = '$S(x) > 0$'
+                    else:
+                        label = ''
+            
+                    # Fill the region between C_l and C_u for the interval
+                    plt.fill_between(x1_fine, C_l(x1_fine), C_u(x1_fine), where=mask, color='lightcoral', alpha=0.1, label=label)
         
         plt.legend()
         plt.show()

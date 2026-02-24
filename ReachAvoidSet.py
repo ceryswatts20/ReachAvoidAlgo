@@ -34,29 +34,29 @@ class ReachAvoidSet:
         self._x_a = None
         self._debug = debug
         (
-            self.robot_type,
-            self.m,
-            self.L,
-            self.q_start,
-            self.q_end,
-            self.min_tau,
-            self.max_tau,
+            self._robot_type,
+            self._m,
+            self._L,
+            self._q_start,
+            self._q_end,
+            self._min_tau,
+            self._max_tau,
         ) = HelperFunctions.load_parameters_from_file(params_file)
         
         if self._debug:
             print("\n--- Loaded Parameters ---")
-            print("Robot Type:", self.robot_type)
-            print("Masses (m):", self.m)
-            print("Lengths (L):", self.L)
-            print("Path Start (q_start_rad):", self.q_start)
-            print("Path End (q_end_rad):", self.q_end)
-            print("Min Torques (min_tau):", self.min_tau)
-            print("Max Torques (max_tau):", self.max_tau)
+            print("Robot Type:", self._robot_type)
+            print("Masses (m):", self._m)
+            print("Lengths (L):", self._L)
+            print("Path Start (q_start_rad):", self._q_start)
+            print("Path End (q_end_rad):", self._q_end)
+            print("Min Torques (min_tau):", self._min_tau)
+            print("Max Torques (max_tau):", self._max_tau)
 
         # Check Lipschitz continuity
         # The path equation
-        q_s_dot_path = self.q_end - self.q_start
-        q_s = lambda s: self.q_start + s * q_s_dot_path
+        q_s_dot_path = self._q_end - self._q_start
+        q_s = lambda s: self._q_start + s * q_s_dot_path
         # Check Lipschitz continuity of the path
         lipschitz = HelperFunctions.is_lipschitz_continuous(q_s)
         # If the path is not Lipschitz continuous, raise an error as the algorithm relies on this property
@@ -66,8 +66,8 @@ class ReachAvoidSet:
         self._lipschitz_const = lipschitz[1]
 
         # Robot Dynamics and Simulator
-        self._robot_dynamics = ManipulatorDynamics(self.m, self.L, self.q_start, self.q_end, self.robot_type)
-        self._simulator = Simulator(self.min_tau, self.max_tau, self._robot_dynamics)
+        self._robot_dynamics = ManipulatorDynamics(self._m, self._L, self._q_start, self._q_end, self._robot_type)
+        self._simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics)
 
         # Compute the VLC, V_u and V_l and the boundary functions C_u(x1) and C_l(x1)
         self._x1_star = np.linspace(0, 1, 101)
@@ -75,8 +75,8 @@ class ReachAvoidSet:
 
         # Reachability calculator
         self._reach_calc = ReachabilityCalculator(
-            self.C_u,
-            self.C_l,
+            self._C_u,
+            self._C_l,
             self._simulator,
             self._C_u_coeffs,
             self._C_l_coeffs,
@@ -104,8 +104,8 @@ class ReachAvoidSet:
         C_u_coeffs_adjusted = C_u_coeffs.copy()
         C_u_coeffs_adjusted[-1] -= safety_diff
         # Create the adjusted C_u function with the safety margin
-        self.C_u = lambda x1: np.polyval(C_u_coeffs_adjusted, x1)
-        self.C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
+        self._C_u = lambda x1: np.polyval(C_u_coeffs_adjusted, x1)
+        self._C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
         # Store the coefficients for later use in reachability calculations
         self._C_u_coeffs = C_u_coeffs_adjusted
         self._C_l_coeffs = np.zeros(poly_degree + 1)
@@ -130,8 +130,8 @@ class ReachAvoidSet:
         # Stop when crossing x1_target
         cross_x1_target = lambda t, x, xt=x1_target: ReachabilityCalculator.event_x1_cross(t, x, xt)
         # Stop when crossing the boundary functions C_u and C_l
-        cross_Cu = lambda t, x, Cu=self.C_u: ReachabilityCalculator.event_Cu_cross(t, x, Cu)
-        cross_Cl = lambda t, x, Cl=self.C_l: ReachabilityCalculator.event_Cl_cross(t, x, Cl)
+        cross_Cu = lambda t, x, Cu=self._C_u: ReachabilityCalculator.event_Cu_cross(t, x, Cu)
+        cross_Cl = lambda t, x, Cl=self._C_l: ReachabilityCalculator.event_Cl_cross(t, x, Cl)
         
         # Set all events to be terminal and to trigger on both directions of crossing
         for event in [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]:
@@ -233,14 +233,14 @@ class ReachAvoidSet:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self.C_l, x_d, x_a, 1))
+            Z_l = T_star_l.union(reach_calc.extend(self._C_l, x_d, x_a, 1))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self.C_u, x_d, x_a, 0))
+            Z_u = T_star_u.union(reach_calc.extend(self._C_u, x_d, x_a, 0))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -251,7 +251,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is on the lower boundary.")
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self.C_l, [0, 0], x_a, 1))
+                Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -262,7 +262,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self.C_u, [0, 0], x_d, 0))
+                Z_u = T_star_u.union(reach_calc.extend(self._C_u, [0, 0], x_d, 0))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")
@@ -292,10 +292,7 @@ class ReachAvoidSet:
             raise RuntimeError("Call compute() before plot().")
 
         X_T = self._X_T
-        x1_fine = np.linspace(0, 1, 500)
-
-        Z_u_arr = np.array(sorted(self._Z_u))
-        Z_l_arr = np.array(sorted(self._Z_l))
+        x1_fine = np.linspace(0, 1, 5000)
 
         # Create the plot and set the labels and title
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -306,8 +303,8 @@ class ReachAvoidSet:
         
         # Plot the boundary functions C_u and C_l if requested
         if show_boundaries:
-            ax.plot(x1_fine, self.C_u(x1_fine), "r-", label="$C_u(x_1)$")
-            ax.plot(x1_fine, self.C_l(x1_fine), "m-", label="$C_l(x_1)$")
+            ax.plot(x1_fine, self._C_u(x1_fine), "r-", label="$C_u(x_1)$")
+            ax.plot(x1_fine, self._C_l(x1_fine), "m-", label="$C_l(x_1)$")
             
         # Plot the backward trajectories from the top and bottom of the target set if requested
         if show_trajectories:
@@ -318,11 +315,21 @@ class ReachAvoidSet:
 
         # Plot shaded intervals of S(x) sign if requested
         if show_intervals:
+            
+            # TODO: If there are no roots skip with a debug comment 
             x1_star = self._x1_star
             # Find the roots of S(x)
             roots = self._reach_calc.find_S_roots(x1_star)
             # Generate intervals of x1 where S(x) is positive or negative based on the roots
             I_in, I_out, _ = self._reach_calc.generate_partition_I(roots)
+            
+            if self._debug:
+                print(f"Found roots: {roots}")
+                print(f"I_in: {I_in}")
+                print(f"I_out: {I_out}")
+            
+            # Draw the vertical lines from y=0 up to the C_u curve
+            ax.vlines(x=roots, ymin=0, ymax=self._C_u(np.array(roots)), colors='green', linestyles='solid', label='Roots of $S(x)$')
             
             # Shade intervals where S(x) <= 0 in light green
             # For each interval in I_in, fill between C_l and C_u
@@ -330,8 +337,8 @@ class ReachAvoidSet:
                 mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
                 ax.fill_between(
                     x1_fine,
-                    self.C_l(x1_fine),
-                    self.C_u(x1_fine),
+                    self._C_l(x1_fine),
+                    self._C_u(x1_fine),
                     where=mask,
                     color="lightgreen",
                     alpha=0.3,
@@ -343,8 +350,8 @@ class ReachAvoidSet:
                 mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
                 ax.fill_between(
                     x1_fine,
-                    self.C_l(x1_fine),
-                    self.C_u(x1_fine),
+                    self._C_l(x1_fine),
+                    self._C_u(x1_fine),
                     where=mask,
                     color="lightcoral",
                     alpha=0.3,
@@ -358,14 +365,16 @@ class ReachAvoidSet:
         ax.plot(X_T[0], X_T[1], "ko")
         
         # Z boundaries
+        Z_u_arr = np.array(sorted(self._Z_u))
+        Z_l_arr = np.array(sorted(self._Z_l))
         # Extract x and y coordinates
         x1_Z_u = Z_u_arr[:, 0]
         x2_Z_u = Z_u_arr[:, 1]
         x1_Z_l = Z_l_arr[:, 0]
         x2_Z_l = Z_l_arr[:, 1]
         
-        # ax.plot(x1_Z_u, x2_Z_l, "b", label="$Z_l$")
-        # ax.plot(x1_Z_u, x2_Z_u, "r", label="$Z_u$")
+        ax.plot(x1_Z_u, x2_Z_u, "m--", label="$Z_u$")
+        ax.plot(x1_Z_l, x2_Z_l, "g--", label="$Z_l$")
 
         # Shaded reach-avoid set
         x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
@@ -376,8 +385,8 @@ class ReachAvoidSet:
         f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
         
         # Plot the interpolated upper and lower boundaries of the reach-avoid set
-        ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b-", label="$Z_u$ (interpolated)")
-        ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r-", label="$Z_l$ (interpolated)")
+        ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
+        ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
         # Fill between the upper and lower boundaries to show the reach-avoid set
         ax.fill_between(
             x_vals_filtered,
@@ -400,6 +409,9 @@ if __name__ == "__main__":
     
     X_T = [0.8, 0.05, 4]
     R_X_T = reachAvoidSet.compute(X_T)
+    reachAvoidSet.plot(True, False, True)
     
-    reachAvoidSet.plot(False, True, False)
+    X_T_2 = [1, 0, 3]
+    R_X_T_2 = reachAvoidSet.compute(X_T_2)
+    reachAvoidSet.plot(True, False, True)
     
