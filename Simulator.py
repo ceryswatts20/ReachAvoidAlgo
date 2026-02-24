@@ -7,7 +7,7 @@ Simulates the system to calculate various system boundaries
 """
 class Simulator:
     """
-    Initializes Simulator.
+    Initialises Simulator.
     
     Args:
         min_tau (np.ndarray): Minimum joint torques.

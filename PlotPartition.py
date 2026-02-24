@@ -30,7 +30,7 @@ if __name__ == "__main__":
         print("Min Torques (min_tau):", min_tau_loaded) 
         print("Max Torques (max_tau):", max_tau_loaded)
 
-        # --- Initialize Dynamics and Simulation ---
+        # --- Initialise Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
 
@@ -93,7 +93,7 @@ if __name__ == "__main__":
         
         print("\n--- Generating Partition I ---")
         tolerance = 1e-6
-        # Initialize lists for intervals
+        # Initialise lists for intervals
         I_in, I_out, I = reach_calc.generate_partition_I(roots, tolerance)
         
         print("\nIntervals where S(x) <= 0 (I_in):")

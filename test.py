@@ -20,7 +20,7 @@ if __name__ == "__main__":
         print("Max Torques (max_tau):", max_tau_loaded)
         
         theta = 5
-        # --- Initialize Dynamics and Simulation ---
+        # --- Initialise Dynamics and Simulation ---
         robot_dynamics_A = ManipulatorDynamics(m, L, q_start, q_end)
         robot_dynamics_B = ManipulatorDynamics(m, L, q_start, q_end)
 
