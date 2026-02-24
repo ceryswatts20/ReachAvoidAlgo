@@ -196,7 +196,7 @@ class ReachAvoidSet:
         # Initial conditions - bottom of the target set
         x0_l = np.array([X_T[0], x2_min])
 
-        # Backward trajectories from top and bottom of target set
+        # Backward trajectories from top and bottom of target set. Array of (x1, x2) pairs.
         T_star_u_arr = self._integrate(x0_u, u=0, x1_target=0.0, direction="backward")
         T_star_l_arr = self._integrate(x0_l, u=1, x1_target=0.0, direction="backward")
         # Store the backward trajectories for later use in plotting
@@ -232,14 +232,14 @@ class ReachAvoidSet:
         if on_lower_a and on_lower_d:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
-                
+            # Z_l = T_star_l and extended trajectory
             Z_l = T_star_l.union(reach_calc.extend(self.C_l, x_d, x_a, 1))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
-
+            # Z_u = T_star_u and extended trajectory
             Z_u = T_star_u.union(reach_calc.extend(self.C_u, x_d, x_a, 0))
             Z_l = T_star_l
         else:
@@ -250,6 +250,7 @@ class ReachAvoidSet:
             if on_lower_a:
                 if self._debug:
                     print("x_a is on the lower boundary.")
+                # Z_l = T_star_l and extended trajectory
                 Z_l = T_star_l.union(reach_calc.extend(self.C_l, [0, 0], x_a, 1))
             else:
                 if self._debug:
@@ -260,6 +261,7 @@ class ReachAvoidSet:
             if on_upper_d:
                 if self._debug:
                     print("x_d is on the upper boundary.")
+                # Z_u = T_star_u and extended trajectory
                 Z_u = T_star_u.union(reach_calc.extend(self.C_u, [0, 0], x_d, 0))
             else:
                 if self._debug:
@@ -356,21 +358,31 @@ class ReachAvoidSet:
         ax.plot(X_T[0], X_T[1], "ko")
         
         # Z boundaries
-        ax.plot(Z_l_arr[:, 0], Z_l_arr[:, 1], "b", label="$Z_l$")
-        ax.plot(Z_u_arr[:, 0], Z_u_arr[:, 1], "r", label="$Z_u$")
+        # Extract x and y coordinates
+        x1_Z_u = Z_u_arr[:, 0]
+        x2_Z_u = Z_u_arr[:, 1]
+        x1_Z_l = Z_l_arr[:, 0]
+        x2_Z_l = Z_l_arr[:, 1]
+        
+        # ax.plot(x1_Z_u, x2_Z_l, "b", label="$Z_l$")
+        # ax.plot(x1_Z_u, x2_Z_u, "r", label="$Z_u$")
 
         # Shaded reach-avoid set
-        x_vals = np.unique(np.concatenate((Z_u_arr[:, 0], Z_l_arr[:, 0])))
+        x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
         # Filter x_vals to be within 0 and the target set
-        x_vals = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
+        x_vals_filtered = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
         # Create interpolation functions for the upper and lower boundaries to fill between them. Needed for ax.fill_between which requires functions or arrays defined on the same x values.
-        f_u = interp1d(Z_u_arr[:, 0], Z_u_arr[:, 1], kind="linear", fill_value="extrapolate")
-        f_l = interp1d( Z_l_arr[:, 0], Z_l_arr[:, 1], kind="linear", fill_value="extrapolate")
+        f_u = interp1d(x1_Z_u, x2_Z_u, kind="linear", fill_value="extrapolate")
+        f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
+        
+        # Plot the interpolated upper and lower boundaries of the reach-avoid set
+        ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b-", label="$Z_u$ (interpolated)")
+        ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r-", label="$Z_l$ (interpolated)")
         # Fill between the upper and lower boundaries to show the reach-avoid set
         ax.fill_between(
-            x_vals,
-            f_l(x_vals),
-            f_u(x_vals),
+            x_vals_filtered,
+            f_l(x_vals_filtered),
+            f_u(x_vals_filtered),
             color="gray",
             alpha=0.75,
             label="$\\mathcal{R}(\\mathcal{X}_T)$",
@@ -389,4 +401,5 @@ if __name__ == "__main__":
     X_T = [0.8, 0.05, 4]
     R_X_T = reachAvoidSet.compute(X_T)
     
-    reachAvoidSet.plot(True, True, True)
+    reachAvoidSet.plot(False, True, False)
+    

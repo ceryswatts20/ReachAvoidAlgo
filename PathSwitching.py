@@ -36,7 +36,7 @@ if __name__ == "__main__":
             # Stop the program if the path is not Lipschitz continuous, as the algorithm relies on this property
             exit(1)
         
-        # --- Initialize Dynamics and Simulation ---
+        # --- Initialise Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
         
