@@ -32,11 +32,10 @@ if __name__ == "__main__":
         if lipschitz[0]:
             print(f"The path is Lipschitz continuous with constant L = {lipschitz[1]:.4f}")
         else:
-            print("The path is not Lipschitz continuous.")
-            # Stop the program if the path is not Lipschitz continuous, as the algorithm relies on this property
-            exit(1)
+            # Raise an error if the path is not Lipschitz continuous, as the algorithm relies on this property
+            raise ValueError("Path is not Lipschitz continuous.")
         
-        # --- Initialize Dynamics and Simulation ---
+        # --- Initialise Dynamics and Simulation ---
         robot_dynamics = ManipulatorDynamics(m, L, q_start, q_end, robot_type)
         simulator = Simulator(min_tau_loaded, max_tau_loaded, robot_dynamics)
 
@@ -55,9 +54,10 @@ if __name__ == "__main__":
         # Use the Lipschitz constant to calculate a safety margin that accounts for the gap between the polynomial approx and the true VLC. This is a conservative estimate of how much the function values could change between the sampled points, which helps ensure that our computed boundaries are safe.
         safety_diff = lipschitz[1]* (x1_star[1] - x1_star[0]) / 2
         print(f"Safety margin: {safety_diff}")
-        # Apply safety margin to coefficients
+        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
         C_u_coeffs_adjusted = C_u_coeffs.copy()
         C_u_coeffs_adjusted[-1] -= safety_diff
+        # Create the adjusted C_u function with the safety margin
         C_u = lambda x1: np.polyval(C_u_coeffs_adjusted, x1)
         C_l = lambda x1: np.zeros_like(x1)
         C_l_coeffs = np.zeros(poly_degree + 1)
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         roots = reach_calc.find_S_roots(x1_star)
         
         print("\n--- Generating Partition I ---")
-        # Initialize lists for intervals
+        # Initialise lists for intervals
         I_in, I_out, I = reach_calc.generate_partition_I(roots)
         for interval in I:
             print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         # T_star_u = array of (x1, x2) pairs along the trajectory
         T_star_u_arr = T_back_u.sol(t_dense).T
         # Convert from np.array to set
-        T_star_u = set(tuple(row) for row in T_star_u_arr)
+        T_star_u = set(map(tuple, T_star_u_arr))
         
         # Define the ode function for lower trajectory
         dynamics_func_lower = lambda t, x, direction=direction, u=1: simulator.get_double_integrator_dynamics(t, x, direction, u)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
         # T_star_l = array of (x1, x2) pairs along the trajectory
         T_star_l_arr = T_back_l.sol(t_dense).T
         # Convert from np.array to set()
-        T_star_l = set(tuple(row) for row in T_star_l_arr)
+        T_star_l = set(map(tuple, T_star_l_arr))
         
         # Find the left most point in the trajectory (i.e., minimum x1)
         x_d = min(T_star_u, key=lambda point: point[0])
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         print(f"x_a: {x_a[0]:.6f}, {x_a[1]:.6f}")
         
         print("\n--- Algorithm 1 ---")
-        # Initialize sets Z_u and Z_l
+        # Initialise sets Z_u and Z_l
         Z_u = set()
         Z_l = set()
         
@@ -245,8 +245,8 @@ if __name__ == "__main__":
         # Plot the original upper and lower boundary points
         plt.plot(Z_l_arr[:, 0], Z_l_arr[:, 1], 'b', label='$Z_l$')
         plt.plot(Z_u_arr[:, 0], Z_u_arr[:, 1], 'r', label='$Z_u$')
-        # Plot the interpolated lines (optional, but shows what fill_between is using)
         
+        # Plot the interpolated lines (optional, but shows what fill_between is using)
         if False:
             plt.plot(x_vals_filtered, x2_Z_u_interp, 'o--', linewidth=1, label='Interpolated $Z_u$')
             plt.plot(x_vals_filtered, x2_Z_l_interp, 'g--', linewidth=1, label='Interpolated $Z_l$')
@@ -255,7 +255,7 @@ if __name__ == "__main__":
         plt.fill_between(x_vals_filtered, x2_Z_l_interp, x2_Z_u_interp, color='gray', alpha=0.75, label='$\mathcal{R(X}_T)$')
         
         # Plot intervals
-        if False:
+        if True:
             # If any roots were found
             if roots:
                 # Draw the vertical lines from y=0 up to the C_u curve
