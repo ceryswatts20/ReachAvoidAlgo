@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Callable
 
-def load_parameters_from_file(filepath='parameters.txt'):
+def load_parameters_from_file(filepath):
     # Dictionary to hold extracted parameters
     parameters = {}
     current_key = None

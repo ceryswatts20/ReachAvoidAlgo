@@ -9,7 +9,7 @@ class ManipulatorDynamics:
     GRAVITATIONAL_CONSTANT = 9.81
     
     """
-    Initializes the ManipulatorDynamics class with link masses, lengths,
+    Initialises the ManipulatorDynamics class with link masses, lengths,
     and start/end joint angles in radians.
     """
     def __init__(self, m, L, q_start_rad, q_end_rad, type_of_dynamics):
