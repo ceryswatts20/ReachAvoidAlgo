@@ -177,8 +177,6 @@ if __name__ == "__main__":
                 print("x_d is not on the upper boundary C_u.")
                 Z_u = T_star_u
         
-        
-        R_X_T = Z_l.intersection(Z_u)
         # Convert sets to arrays for easier plotting
         T_star_u = np.array(sorted(list(T_star_u)))
         T_star_l = np.array(sorted(list(T_star_l)))

@@ -25,7 +25,6 @@ class ReachAvoidSet:
 
         # Initialise variables to store results
         self._X_T = None
-        self._R_X_T = None
         self._Z_u = None
         self._Z_l = None
         self._T_star_u_arr = None
@@ -271,10 +270,18 @@ class ReachAvoidSet:
         # Save the computed sets for later use in plotting
         self._Z_u = Z_u
         self._Z_l = Z_l
-        self._R_X_T = Z_l.intersection(Z_u)
 
         # Return the reach-avoid set as a set of (x1, x2) tuples
-        return self._R_X_T
+        return {"Z_u": self._Z_u, "Z_l": self._Z_l}
+        # Return the computed sets and values
+        # return {
+        #     "R_X_T": self._R_X_T,
+        #     "reachabilityCalculator": self._reach_calc,
+        #     "T_star_u": self._T_star_u,
+        #     "T_star_l": self._T_star_l,
+        #     "x_d": self._x_d,
+        #     "x_a": self._x_a
+        # }
 
     def plot(self, show_boundaries: bool, show_intervals: bool, show_trajectories: bool):
         """
@@ -411,7 +418,7 @@ if __name__ == "__main__":
     R_X_T = reachAvoidSet.compute(X_T)
     reachAvoidSet.plot(True, False, True)
     
-    X_T_2 = [1, 0, 3]
-    R_X_T_2 = reachAvoidSet.compute(X_T_2)
-    reachAvoidSet.plot(True, False, True)
+    # X_T2 = [1, 0, 3]
+    # R_X_T2 = reachAvoidSet.compute(X_T2)
+    # reachAvoidSet.plot(True, False, True)
     
