@@ -279,11 +279,13 @@ class ReachAvoidSet:
         # Return the reach-avoid set as a set of (x1, x2) tuples
         return self._R_X_T
 
-    def plot(self, show_boundaries: bool, show_intervals: bool, show_trajectories: bool):
+    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool):
         """
         Plots the reach-avoid set and associated curves.
 
         Args:
+            show_targetset (bool): Whether to plot the target set.
+            show_reach_avoid (bool): Whether to plot the reach-avoid set.
             show_boundaries (bool): Whether to plot C_u and C_l.
             show_intervals (bool): Whether to shade S(x) sign intervals.
 
@@ -291,7 +293,7 @@ class ReachAvoidSet:
             RuntimeError: If compute() has not been called yet.
         """
         
-        if self._R_X_T is None:
+        if show_reach_avoid and self._R_X_T is None:
             raise RuntimeError("Call compute() before plot().")
 
         X_T = self._X_T
@@ -361,44 +363,46 @@ class ReachAvoidSet:
                     # Only label the first interval to avoid duplicate labels in the legend
                     label="$S(x)>0$" if i == 0 else "",
                 )
-                
-        # Target set
-        ax.vlines(X_T[0], X_T[1], X_T[2], colors="orange", label="$\\mathcal{X}_T$")
-        ax.plot(X_T[0], X_T[2], "ko")
-        ax.plot(X_T[0], X_T[1], "ko")
         
-        # Z boundaries
-        Z_u_arr = np.array(sorted(self._Z_u))
-        Z_l_arr = np.array(sorted(self._Z_l))
-        # Extract x and y coordinates
-        x1_Z_u = Z_u_arr[:, 0]
-        x2_Z_u = Z_u_arr[:, 1]
-        x1_Z_l = Z_l_arr[:, 0]
-        x2_Z_l = Z_l_arr[:, 1]
+        if show_targetset:
+            # Target set
+            ax.vlines(X_T[0], X_T[1], X_T[2], colors="orange", label="$\\mathcal{X}_T$")
+            ax.plot(X_T[0], X_T[2], "ko")
+            ax.plot(X_T[0], X_T[1], "ko")
         
-        ax.plot(x1_Z_u, x2_Z_u, "m--", label="$Z_u$")
-        ax.plot(x1_Z_l, x2_Z_l, "g--", label="$Z_l$")
+        if show_reach_avoid:
+            # Z boundaries
+            Z_u_arr = np.array(sorted(self._Z_u))
+            Z_l_arr = np.array(sorted(self._Z_l))
+            # Extract x and y coordinates
+            x1_Z_u = Z_u_arr[:, 0]
+            x2_Z_u = Z_u_arr[:, 1]
+            x1_Z_l = Z_l_arr[:, 0]
+            x2_Z_l = Z_l_arr[:, 1]
+            
+            ax.plot(x1_Z_u, x2_Z_u, "m--", label="$Z_u$")
+            ax.plot(x1_Z_l, x2_Z_l, "g--", label="$Z_l$")
 
-        # Shaded reach-avoid set
-        x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
-        # Filter x_vals to be within 0 and the target set
-        x_vals_filtered = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
-        # Create interpolation functions for the upper and lower boundaries to fill between them. Needed for ax.fill_between which requires functions or arrays defined on the same x values.
-        f_u = interp1d(x1_Z_u, x2_Z_u, kind="linear", fill_value="extrapolate")
-        f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
-        
-        # Plot the interpolated upper and lower boundaries of the reach-avoid set
-        ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
-        ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
-        # Fill between the upper and lower boundaries to show the reach-avoid set
-        ax.fill_between(
-            x_vals_filtered,
-            f_l(x_vals_filtered),
-            f_u(x_vals_filtered),
-            color="gray",
-            alpha=0.75,
-            label="$\\mathcal{R}(\\mathcal{X}_T)$",
-        )
+            # Shaded reach-avoid set
+            x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
+            # Filter x_vals to be within 0 and the target set
+            x_vals_filtered = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
+            # Create interpolation functions for the upper and lower boundaries to fill between them. Needed for ax.fill_between which requires functions or arrays defined on the same x values.
+            f_u = interp1d(x1_Z_u, x2_Z_u, kind="linear", fill_value="extrapolate")
+            f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
+            
+            # Plot the interpolated upper and lower boundaries of the reach-avoid set
+            ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
+            ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
+            # Fill between the upper and lower boundaries to show the reach-avoid set
+            ax.fill_between(
+                x_vals_filtered,
+                f_l(x_vals_filtered),
+                f_u(x_vals_filtered),
+                color="gray",
+                alpha=0.75,
+                label="$\\mathcal{R}(\\mathcal{X}_T)$",
+            )
 
         # Set the legend and show the plot
         ax.legend()
