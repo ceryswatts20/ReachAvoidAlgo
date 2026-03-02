@@ -236,14 +236,14 @@ class ReachAvoidSet:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self._C_l, x_d, x_a, 1))
+            Z_l = T_star_l.union(reach_calc.extend(self._C_l, x_d, x_a, 1, debug=self._debug))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self._C_u, x_d, x_a, 0))
+            Z_u = T_star_u.union(reach_calc.extend(self._C_u, x_d, x_a, 0, debug=self._debug))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -253,8 +253,9 @@ class ReachAvoidSet:
             if on_lower_a:
                 if self._debug:
                     print("x_a is on the lower boundary.")
+                # TODO: Uncomment
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1))
+                #Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -265,7 +266,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self._C_u, [0, 0], x_d, 0))
+                Z_u = T_star_u.union(reach_calc.extend(self._C_u, [0, 0], x_d, 0, debug=self._debug))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")

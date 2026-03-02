@@ -355,7 +355,7 @@ class ReachabilityCalculator:
         Returns:
             set: 
     """
-    def extend(self, V: callable, x_end: float, x_start: float, u: int, e=25e-2) -> set:
+    def extend(self, V: callable, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
         # Line 1: Inputs not defined in the method signature
         x_points = np.linspace(0, 1, 101)
         # Find roots of S(x) on both boundaries
@@ -384,10 +384,20 @@ class ReachabilityCalculator:
             # Increment i
             i = i + 1
         
-        print("Intervals from x_start to x_end")
-        for interval in I[I_start:I_end+1]:
-            print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
-        # ODE setup - defined here to avoid redefining in each loop iteration
+        if debug:
+            print("Intervals from x_start to x_end")
+            for interval in I[I_start:I_end+1]:
+                print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
+            print("I_out intervals:")
+            for interval in I_out:
+                print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
+            print("I_in intervals:")
+            for interval in I_in:
+                print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
+            print(f"1: Delta: {delta:.6f}")
+            print(f"3: y: {y[0]:.6f}, {y[1]:.6f}")
+                
+        # ODE setup
         t_span = (0.0, 10.0)
         # Define the ode function
         dynamics_func = lambda t, x, direction='backward', u=u: self.boundarySim.get_double_integrator_dynamics(t, x, direction, u)
@@ -396,45 +406,58 @@ class ReachabilityCalculator:
         leave_interval = lambda t, x, x_target=x_end[0]: self.event_x1_cross(t, x, x_target)
         cross_Cu = lambda t, x, C_u=self.C_u: self.event_Cu_cross(t, x, C_u)
         cross_Cl = lambda t, x, C_l=self.C_l: self.event_Cl_cross(t, x, C_l)
-        # Stop when any of these events occur
-        cross_x_axis.terminal = True
-        leave_interval.terminal = True
-        cross_Cu.terminal = True
-        cross_Cl.terminal = True
-        # Set direction to zero to detect all crossings
-        cross_x_axis.direction = 0
-        leave_interval.direction = 0
-        cross_Cu.direction = 0
-        cross_Cl.direction = 0
+        
+        # Set all events to be terminal and to trigger on both directions of crossing
+        for event in [cross_x_axis, leave_interval, cross_Cu, cross_Cl]:
+            event.terminal = True
+            event.direction = 0
+        events = [cross_x_axis, leave_interval, cross_Cu, cross_Cl]
         
         # Line 4:
         # Loop though each interval from x_start and x_end inclusive
         for interval in I[I_start:I_end+1]:
-            # print(f"Interval: {interval[0]:.6f}, {interval[1]:.6f}")
-            # print(f"y: {y[0]:.6f}, {y[1]:.6f}")
+            if debug:
+                print(f"4: Interval: {interval[0]:.6f}, {interval[1]:.6f}")
             # While y is still in the interval i.e y's x1 is less than the interval's x_end and less than the interval's x_start
-            while y[0] < interval[0] + 1e-5 and y[0] >= interval[1] + 1e-5:
+            # TODO: Why is there + 1e-5? 
+            while y[0] <= interval[0] + 1e-5 and y[0] > interval[1] + 1e-5:
                 # Line 5: If interval is in I_in
                 if interval in I_in:
-                    #print("In I_in")
+                    if debug:
+                        print("5: In I_in")
                     # Line 6: If y is on the upper or lower boundary
                     if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
-                        #print("y on boundary")
+                        if debug:
+                            if self.is_on_upper_boundary(y):
+                                print("6: y on upper boundary")
+                            else:
+                                print("6: y on lower boundary")
+                                
                         # Extract part of boundary within the interval
                         V_slice = HelperFunctions.slice(V, interval)
+                        if V_slice.size == 0:
+                            raise ValueError(f"No boundary points found in V_slice i.e no boundary points were found between the interval {interval[0]:.6f} and {interval[1]:.6f}.")
                         # Convert from array to set
                         V_slice = set(tuple(row) for row in V_slice)
+                        if debug:
+                            print(f"V_slice extracted with {len(V_slice)} pts")
+                        
+                        if debug:
+                            print("7: Z union with V_slice attempted")
                         # Line 7: Z = Z and the slice of V over the interval
                         Z = Z.union(V_slice)
+                        if debug:
+                            print(f"7: Z union with V_slice completed with {len(Z)} pts")
                     # Line 8: y is not on with boundary
                     else:
-                        #print("y not on boundary")
+                        if debug:
+                            print("y not on boundary")
                         # Integrate backwards in time from y with control u
                         # until crossing a boundary or reaching the interval end
                         # Initial state
                         x0 = np.array([y[0], y[1]])
                         # Solve ODE
-                        T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=[cross_x_axis, leave_interval, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
+                        T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=events, dense_output=True, rtol=1e-6, atol=1e-8)
                         T_b.message
                         # Set the last valid time before the event
                         t_end = T_b.t[-1]
@@ -443,8 +466,21 @@ class ReachabilityCalculator:
                         # Evaluate the solution at dense time points and transpose for easier plotting
                         # T_b = array of (x1, x2) pairs along the trajectory
                         T_b = T_b.sol(t_dense).T
+                        
+                        # If no trajectory points found, raise error
+                        if len(T_b) == 0:
+                            raise ValueError("No trajectory points found.")
+                        if debug:
+                            print(f"8: Trajectory integrated with {len(T_b)} pts")
+                        
                         # Line 9: Extract the part of trajectory within the interval
                         T_I = HelperFunctions.slice(T_b, interval)
+                        if debug:
+                            print(f"9: T_I extracted with {len(T_I)} pts")
+                        # If no trajectory points found in the interval, raise error
+                        if len(T_I) == 0:
+                            raise ValueError(f"No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
+                            
                         # Initialise array to hold intersection points
                         intersection_pts = np.array([])
                         # For each state in the trajectory T_I
@@ -460,41 +496,70 @@ class ReachabilityCalculator:
                             
                         # Line 10: If T_I intersets with the boundary V
                         if intersection_pts.size != 0:
-                            #print("T_I intersects with V")
+                            if debug:
+                                print("10: T_I intersects with V")
                             # Line 11: Find the left most intersection point
                             x_int = T_I[np.argmin(T_I[:, 0])]
-                            #print(f" x_int: {x_int}")
+                            if debug:
+                                print(f"11: Left most intersection point x_int: {x_int}")
+                                
                             # Line 12: Extract the trajectory from the intersection point to the end of the trajectory. End of trajectory = end of interval (Line 9)
                             T_int = HelperFunctions.slice(T_I, [interval[0], x_int[0]])
                             # Convert from np.array to set
                             T_int = set(tuple(row) for row in T_int)
+                            if debug:
+                                print(f"12: T_int extracted with {len(T_int)} pts")
+                            # If no trajectory points found in T_int, raise error
+                            if len(T_int) == 0:
+                                raise ValueError(f"No trajectory points found in T_int i.e no trajectory points were found between the intersection point {x_int[0]:.6f} and the end of the interval {interval[0]:.6f}.")
+                            
                             # Line 13: Extract the boundary within interval, up to the intersection point
                             V_int = HelperFunctions.slice(V, [x_int[0], interval[1]])
                             # Convert from np.array to set
                             V_int = set(tuple(row) for row in V_int)
+                            
+                            # If no boundary points found in V_int, raise error
+                            if len(V_int) == 0:
+                                raise ValueError(f"No boundary points found in V_int i.e no boundary points were found between the intersection point {x_int[0]:.6f} and the start of the interval {interval[1]:.6f}.")
+                            if debug:
+                                print(f"13: V_int extracted with {len(V_int)} pts")
+                            
                             # Line 14: Z = Z and T_int and V_int
-                            #print("Z union attempted")
+                            if debug:
+                                print("14: Z union with T_int and V_int attempted")
                             Z = Z.union(T_int).union(V_int)
-                            #print("Z union completed")
+                            if debug:
+                                print(f"14: Z union completed with {len(Z)} pts")
                         # Line 15: If T_I does not intersect with the boundary V
                         else:
-                            #print("T_I didn't intersect with V")
+                            if debug:
+                                print("15: T_I didn't intersect with V")
+                                print("16:Z union with T_I attempted")
                             # Line 16: Z = Z and T_I
                             Z = Z.union(T_I)  
+                            if debug:
+                                print(f"16: Z union completed with {len(Z)} pts")
                 # Line 17: If interval is in I_out
                 elif interval in I_out:
-                    #print("In I_out")
+                    if debug:
+                        print("17: In I_out")
                     # Line 18: If y is on the upper or lower boundary
                     if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
                         # Line 19: y = (y1, y2 + delta)
                         y = np.array([y[0], y[1] + delta])
-                        
+                        if debug:
+                            if self.is_on_upper_boundary(y):
+                                print("18: y on upper boundary")
+                            else:
+                                print("18: y on lower boundary")
+                            print(f"19: y updated to: {y[0]:.6f}, {y[1]:.6f}")
+                    
                     # Integrate backwards in time from y with control u
                     # until crossing a boundary or reaching the interval end
                     # Initial state
                     x0 = np.array([y[0], y[1]])
                     # Solve ODE
-                    T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=[cross_x_axis, leave_interval, cross_Cu, cross_Cl], dense_output=True, rtol=1e-6, atol=1e-8)
+                    T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=events, dense_output=True, rtol=1e-6, atol=1e-8)
                     # Set the last valid time before the event
                     t_end = T_b.t[-1]
                     # Create a dense time array for smooth plotting
@@ -502,22 +567,35 @@ class ReachabilityCalculator:
                     # Evaluate the solution at dense time points and transpose for easier plotting
                     # T_b = array of (x1, x2) pairs along the trajectory
                     T_b = T_b.sol(t_dense).T
+                    
+                    # If no trajectory points found, raise error
+                    if len(T_b) == 0:
+                        raise ValueError("No trajectory points found.")
+                    if debug:
+                            print(f"20: Trajectory integrated with {len(T_b)} pts")
+                    
                     # Line 20: Extract the part of trajectory within the interval
                     T_b_slice = HelperFunctions.slice(T_b, interval)
+                    # If no trajectory points found in the interval, raise error
+                    if len(T_b_slice) == 0:
+                        raise ValueError(f"No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
                     # Convert from array to set
                     T_b_slice = set(tuple(row) for row in T_b_slice)
+                    if debug:
+                        print(f"20: T_b_slice extracted with {len(T_b_slice)} pts")
                     
                     # Line 21: Z = Z and T_b_slice
+                    if debug:
+                        print("21: Z union with T_b_slice attempted")
                     Z = Z.union(T_b_slice)
-                    #print(f"Size of set Z: {len(Z)}")
+                    if debug:
+                        print(f"21: Z union completed with {len(Z)} pts")
                 
-                #print("update y")
                 # Line 23:
                 # Update y to the left most point of Z
                 y = min(Z, key=lambda point: point[0])
-                # Round y to 6 d.p for easier comparisons
-                #y = round(y, 6)
-                #print(f"y: {y[0]:.6f}, {y[1]:.6f}")
+                if debug:
+                    print(f"23: Updated y to the left most point of Z: y: {y[0]:.6f}, {y[1]:.6f}")
     
         # Line 24
         return Z
