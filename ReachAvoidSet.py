@@ -279,7 +279,7 @@ class ReachAvoidSet:
         # Return the reach-avoid set as a set of (x1, x2) tuples
         return self._R_X_T
 
-    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool):
+    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
         """
         Plots the reach-avoid set and associated curves.
 
@@ -303,7 +303,7 @@ class ReachAvoidSet:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.set_xlabel("$x_1$")
         ax.set_ylabel("$x_2$")
-        ax.set_title("Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
+        ax.set_title(title)
         ax.grid(True)
         
         # Plot the boundary functions C_u and C_l if requested
@@ -413,14 +413,18 @@ class ReachAvoidSet:
 
 if __name__ == "__main__":
     q_start = np.array([0, 0])
-    q_end = np.array([150, 90])
+    q_end = np.array([108, 108])
     reachAvoidSet = ReachAvoidSet("parameters.txt", q_start, q_end, debug=True)
     
-    X_T = [0.8, 0.05, 4]
+    X_T = [1, 0, 4]
     R_X_T = reachAvoidSet.compute(X_T)
-    reachAvoidSet.plot(True, False, True)
+    reachAvoidSet.plot(True, True, True, True, True)
+
     
-    # X_T_2 = [1, 0, 3]
-    # R_X_T_2 = reachAvoidSet.compute(X_T_2)
-    # reachAvoidSet.plot(True, False, True)
+    qB_start = np.array([0, 108])
+    qB_end = np.array([108, 0])
+    reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end, debug=True)
+    X_Tb = [1, 0.05, 80]
+    #R_X_Tb = reachAvoidSetB.compute(X_Tb)
+    #reachAvoidSetB.plot(True, True, True, True, True)
     
