@@ -15,7 +15,7 @@ class ReachAvoidSet:
     given a parameters file and a target set X_T.
     """
 
-    def __init__(self, params_file, q_start: np.ndarray, q_end: np.ndarray, debug: bool):
+    def __init__(self, params_file: str, q_start: np.ndarray, q_end: np.ndarray, debug: bool = False):
         """
         Initialises the class by loading the system parameters and initilising the dynamics, simulator and reachability classes.
 
@@ -70,7 +70,7 @@ class ReachAvoidSet:
 
         # Robot Dynamics and Simulator
         self._robot_dynamics = ManipulatorDynamics(self._m, self._L, self._q_start, self._q_end, self._robot_type)
-        self._simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics)
+        self.simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics)
 
         # Compute the VLC, V_u and V_l and the boundary functions C_u(x1) and C_l(x1)
         self._x1_star = np.linspace(0, 1, 101)
@@ -80,7 +80,7 @@ class ReachAvoidSet:
         self._reach_calc = ReachabilityCalculator(
             self._C_u,
             self._C_l,
-            self._simulator,
+            self.simulator,
             self._C_u_coeffs,
             self._C_l_coeffs,
         )
@@ -95,7 +95,7 @@ class ReachAvoidSet:
         
         x1_star = self._x1_star
         # Calculate the upper boundary set
-        V_u = self._simulator.calculate_upper_boundary(x1_star, 30.0)
+        V_u = self.simulator.calculate_upper_boundary(x1_star, 30.0)
         # Set lower boundary set to zero
         V_l = np.zeros_like(V_u)
         # Fit polynomial to upper boundary set to get C_u(x1)
@@ -159,7 +159,7 @@ class ReachAvoidSet:
         """
         
         # Define the dynamics function for integration based on the control input and direction
-        dynamics = lambda t, x: self._simulator.get_double_integrator_dynamics(t, x, direction, u)
+        dynamics = lambda t, x: self.simulator.get_double_integrator_dynamics(t, x, direction, u)
         # Create event functions for stopping conditions
         events = self._make_events(x1_target)
         # Large time span to ensure we integrate until an event occurs
@@ -253,9 +253,8 @@ class ReachAvoidSet:
             if on_lower_a:
                 if self._debug:
                     print("x_a is on the lower boundary.")
-                # TODO: Uncomment
                 # Z_l = T_star_l and extended trajectory
-                #Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1, debug=self._debug))
+                Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -295,7 +294,7 @@ class ReachAvoidSet:
         """
         
         if show_reach_avoid and self._R_X_T is None:
-            raise RuntimeError("Call compute() before plot().")
+            raise RuntimeError("To plot the reach-avoid set and/or the target set, call compute() before plot().")
 
         X_T = self._X_T
         x1_fine = np.linspace(0, 1, 5000)
@@ -393,24 +392,46 @@ class ReachAvoidSet:
             f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
             
             # Plot the interpolated upper and lower boundaries of the reach-avoid set
-            ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
-            ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
-            # Fill between the upper and lower boundaries to show the reach-avoid set
-            ax.fill_between(
-                x_vals_filtered,
-                f_l(x_vals_filtered),
-                f_u(x_vals_filtered),
-                color="gray",
-                alpha=0.75,
-                label="$\\mathcal{R}(\\mathcal{X}_T)$",
-            )
+            # ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
+            # ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
+            # # Fill between the upper and lower boundaries to show the reach-avoid set
+            # ax.fill_between(
+            #     x_vals_filtered,
+            #     f_l(x_vals_filtered),
+            #     f_u(x_vals_filtered),
+            #     color="gray",
+            #     alpha=0.75,
+            #     label="$\\mathcal{R}(\\mathcal{X}_T)$",
+            # )
 
         # Set the legend and show the plot
         ax.legend()
         plt.tight_layout()
         plt.show()
         
+    def get_boundary_functions(self, poly_degree: int = 10):
+        """ Creates boundary function for reach-avoid set boundaries Zu and Zl
 
+        Args:
+            poly_degree (int, optional): _description_. Defaults to 10.
+
+        Returns:
+            
+        """
+        x1_star = self._x1_star
+        Z_u_arr = np.array(sorted(self._Z_u))
+        _, Z_u_coeffs = Simulator.create_constrained_polynomial(x1_star, Z_u_arr, degree=poly_degree)
+        
+        # Safety margin based on Lipschitz constant
+        safety_diff = self._lipschitz_const * (x1_star[1] - x1_star[0]) / 2
+        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
+        Z_u_coeffs_adjusted = Z_u_coeffs.copy()
+        Z_u_coeffs_adjusted[-1] -= safety_diff
+        # Create the adjusted C_u function with the safety margin
+        Z_u = lambda x1: np.polyval(Z_u_coeffs_adjusted, x1)
+        Z_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
+        
+        return Z_u, Z_l
 
 if __name__ == "__main__":
     q_start = np.array([0, 0])

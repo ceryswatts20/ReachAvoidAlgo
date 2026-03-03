@@ -351,6 +351,7 @@ class ReachabilityCalculator:
             x_start (float): The start of the interval.
             u (int): Control input, 0 for max decceleration L, 1 for max acceleration U.
             e (float): Small value to perturb y when in I_out intervals.
+            debug (bool): If True, print debug information during the computation.
             
         Returns:
             set: 
@@ -364,11 +365,16 @@ class ReachabilityCalculator:
         I_in, I_out, I = self.generate_partition_I(roots)
         # Initialise delta
         delta = (-1)**(u+1) * e
+        
         # Line 3: Initialise Z and y
         # Initialise y
         y = x_start
         # Initialise output set
         Z = set()
+        # Variable to track if y updates to prevent infinite loops
+        prev_y = None
+        # Loop counter
+        loop_counter = 0
         
         # Find intervals x_start and x_end are in
         I_start = I_end = i = 0
@@ -420,7 +426,7 @@ class ReachabilityCalculator:
                 print(f"4: Interval: {interval[0]:.6f}, {interval[1]:.6f}")
             # While y is still in the interval i.e y's x1 is less than the interval's x_end and less than the interval's x_start
             # TODO: Why is there + 1e-5? 
-            while y[0] <= interval[0] + 1e-5 and y[0] > interval[1] + 1e-5:
+            while y[0] <= interval[0] + 1e-3 and y[0] > interval[1] + 1e-3:
                 # Line 5: If interval is in I_in
                 if interval in I_in:
                     if debug:
@@ -594,8 +600,22 @@ class ReachabilityCalculator:
                 # Line 23:
                 # Update y to the left most point of Z
                 y = min(Z, key=lambda point: point[0])
+                
+                # If y is the same as the previous y, update counter, else reset counter
+                if y == prev_y:
+                    loop_counter += 1
+                else:
+                    loop_counter = 0
+                prev_y = y
+                # If y has not updated for 5 iterations, break to prevent infinite loop
+                if loop_counter >= 5:
+                    if debug:
+                        print("y has not updated for 5 iterations, breaking to prevent infinite loop.")
+                        return Z
+                    
+                    raise RuntimeError("y has not updated for 5 iterations, breaking to prevent infinite loop.")
+                
                 if debug:
                     print(f"23: Updated y to the left most point of Z: y: {y[0]:.6f}, {y[1]:.6f}")
-    
         # Line 24
         return Z
