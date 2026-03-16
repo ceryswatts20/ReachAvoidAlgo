@@ -439,8 +439,8 @@ class ReachabilityCalculator:
                             else:
                                 print("6: y on lower boundary")
                                 
-                        # Extract part of boundary within the interval
-                        V_slice = HelperFunctions.slice(V, interval)
+                        # Extract the part of boundary within the interval starting from y.
+                        V_slice = HelperFunctions.slice(V, [y[0], interval[1]])
                         if V_slice.size == 0:
                             raise ValueError(f"No boundary points found in V_slice i.e no boundary points were found between the interval {interval[0]:.6f} and {interval[1]:.6f}.")
                         # Convert from array to set

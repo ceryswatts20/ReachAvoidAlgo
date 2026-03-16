@@ -215,10 +215,33 @@ class ReachAvoidSet:
         self._x_d = x_d
         self._x_a = x_a
         
-        if self._debug:
+        if False:
             print(f"Target set X_T: {self._X_T}")
             print(f"x_d: {x_d[0]:.6f}, {x_d[1]:.6f}")
             print(f"x_a: {x_a[0]:.6f}, {x_a[1]:.6f}")
+            
+            # Create the plot and set the labels and title
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.set_xlabel("$x_1$")
+            ax.set_ylabel("$x_2$")
+            ax.set_title("Backward Trajectories from Target Set")
+            ax.grid(True)
+            
+            # Target set
+            ax.vlines(X_T[0], X_T[1], X_T[2], colors="orange", label="$\\mathcal{X}_T$")
+            ax.plot(X_T[0], X_T[2], "ko")
+            ax.plot(X_T[0], X_T[1], "ko")
+                
+            # Plot the backward trajectories from the top and bottom of the target set
+            ax.plot(self._T_star_u_arr[:, 0], self._T_star_u_arr[:, 1], "c-", label="$T^*_u$")
+            ax.plot(self._T_star_l_arr[:, 0], self._T_star_l_arr[:, 1], "y-", label="$T^*_l$")
+            ax.plot(*self._x_d, "ks", label="$x_d$")
+            ax.plot(*self._x_a, "k^", label="$x_a$")
+            
+            # Set the legend and show the plot
+            ax.legend()
+            plt.tight_layout()
+            plt.show()
 
         # Initialise the reachability calculator
         reach_calc = self._reach_calc
@@ -320,7 +343,6 @@ class ReachAvoidSet:
 
         # Plot shaded intervals of S(x) sign if requested
         if show_intervals:
-            
             # TODO: If there are no roots skip with a debug comment 
             x1_star = self._x1_star
             # Find the roots of S(x)
