@@ -1,4 +1,3 @@
-import math
 import numpy as np
 from scipy.optimize import root_scalar
 from scipy.integrate import solve_ivp
@@ -230,68 +229,6 @@ class ReachabilityCalculator:
         return x1_condition and x2_condition
     
     """
-        Event function to stop integration when crossing a targeted x1 point.
-        
-        Args:
-            t (float): Current time.
-            x (np.ndarray): Current state vector [x1, x2].
-            
-        Returns:
-            float: Value indicating when to stop (x1).
-    """
-    @staticmethod
-    def event_x1_cross(t, x, x1_target):
-        return x[0] - x1_target
-    
-    """
-        Event function to stop integration when crossing x-axis.
-        
-        Args:
-            t (float): Current time.
-            x (np.ndarray): Current state vector [x1, x2].
-            
-        Returns:
-            float: Value indicating when to stop (x2).
-    """
-    @staticmethod
-    def event_x2_zero(t, x):
-        return x[1]
-    
-    """
-        Event function to stop integration when crossing the upper boundary.
-        
-        Args:
-            t (float): Current time.
-            x (np.ndarray): Current state vector [x1, x2].
-            
-        Returns:
-            float: Value indicating when to stop (x2 - C_u(x1)).
-    """
-    @staticmethod
-    def event_Cu_cross(t, x, C_u):
-        # Stop when x2 - Cu(x1) = 0
-        x1 = float(x[0])
-        x2 = float(x[1])
-        return float(x2 - C_u(x1))
-    
-    """
-        Event function to stop integration when crossing the lower boundary.
-        
-        Args:
-            t (float): Current time.
-            x (np.ndarray): Current state vector [x1, x2].
-            
-        Returns:
-            float: Value indicating when to stop (x2 - C_l(x1)).
-    """
-    @staticmethod
-    def event_Cl_cross(t, x, C_l):
-        # Stop when x2 - Cl(x1) = 0
-        x1 = float(x[0])
-        x2 = float(x[1])
-        return float(x2 - C_l(x1))
-    
-    """
         Check if the state (x1, x2) lies on the upper boundary curve C_u(x1)
         within a tolerance.
         
@@ -342,6 +279,132 @@ class ReachabilityCalculator:
         else:
             return False
         
+    
+    
+    @staticmethod
+    def event_x1_cross(t, x, x1_target):
+        """
+        Event function to stop integration when crossing a targeted x1 point.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x1).
+        """
+        return x[0] - x1_target
+    
+    @staticmethod
+    def event_x2_zero(t, x):
+        """
+        Event function to stop integration when crossing x-axis.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2).
+        """
+        return x[1]
+    
+    @staticmethod
+    def event_Cu_cross(t, x, C_u):
+        """
+        Event function to stop integration when crossing the upper boundary.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2 - C_u(x1)).
+        """
+        # Stop when x2 - Cu(x1) = 0
+        x1 = float(x[0])
+        x2 = float(x[1])
+        return float(x2 - C_u(x1))
+    
+    @staticmethod
+    def event_Cl_cross(t, x, C_l):
+        """
+        Event function to stop integration when crossing the lower boundary.
+        
+        Args:
+            t (float): Current time.
+            x (np.ndarray): Current state vector [x1, x2].
+            
+        Returns:
+            float: Value indicating when to stop (x2 - C_l(x1)).
+        """
+        # Stop when x2 - Cl(x1) = 0
+        x1 = float(x[0])
+        x2 = float(x[1])
+        return float(x2 - C_l(x1))
+    
+    def make_events(self, x1_target: float):
+        """
+        Creates and configures ODE stop event functions.
+        
+        Args:
+            x1_target: The x1 value at which to stop integration.
+        """
+        
+        # Stop when crossing the x-axis (x2=0)
+        cross_x_axis = self.event_x2_zero
+        # Stop when crossing x1_target
+        cross_x1_target = lambda t, x, xt=x1_target: self.event_x1_cross(t, x, xt)
+        # Stop when crossing the boundary functions C_u and C_l
+        cross_Cu = lambda t, x, Cu=self.C_u: self.event_Cu_cross(t, x, Cu)
+        cross_Cl = lambda t, x, Cl=self.C_l: self.event_Cl_cross(t, x, Cl)
+        
+        # Set all events to be terminal and to trigger on both directions of crossing
+        for event in [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]:
+            event.terminal = True
+            event.direction = 0
+
+        return [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]
+    
+    def integrate(self, x0: np.ndarray, u: int, x1_target: float, direction: str) -> np.ndarray:
+        """
+        Integrates the system dynamics from x0 until an event occurs.
+
+        Args:
+            x0: Initial state [x1, x2].
+            u: Control input (0=max decel L, 1=max accel U).
+            x1_target: x1 value at which to stop integration.
+            direction: 'forward' or 'backward'.
+            
+
+        Returns:
+            Array of shape (N, 2) containing the trajectory.
+        """
+        
+        # Define the dynamics function for integration based on the control input and direction
+        dynamics = lambda t, x: self.boundarySim.get_double_integrator_dynamics(t, x, direction, u)
+        # Create event functions for stopping conditions
+        events = self.make_events(x1_target)
+        # Large time span to ensure we integrate until an event occurs
+        tspan = (0.0, 10.0)
+        # Integrate the dynamics using solve_ivp with the defined events
+        sol = solve_ivp(
+            dynamics,
+            tspan,
+            x0,
+            method="RK45",
+            events=events,
+            dense_output=True,
+            rtol=1e-6,
+            atol=1e-8,
+        )
+        # Create a dense time array for smooth trajectories up to the event time
+        t_dense = np.linspace(sol.t[0], sol.t[-1], 500)
+        
+        # Return the trajectory as an array of shape (N, 2)
+        return sol.sol(t_dense).T
+    
+    
     """
         TODO: Write method description
         
@@ -402,22 +465,6 @@ class ReachabilityCalculator:
                 print(f"  [{interval[0]:.6f}, {interval[1]:.6f}]")
             print(f"1: Delta: {delta:.6f}")
             print(f"3: y: {y[0]:.6f}, {y[1]:.6f}")
-                
-        # ODE setup
-        t_span = (0.0, 10.0)
-        # Define the ode function
-        dynamics_func = lambda t, x, direction='backward', u=u: self.boundarySim.get_double_integrator_dynamics(t, x, direction, u)
-        # Stopping conditions
-        cross_x_axis = self.event_x2_zero
-        leave_interval = lambda t, x, x_target=x_end[0]: self.event_x1_cross(t, x, x_target)
-        cross_Cu = lambda t, x, C_u=self.C_u: self.event_Cu_cross(t, x, C_u)
-        cross_Cl = lambda t, x, C_l=self.C_l: self.event_Cl_cross(t, x, C_l)
-        
-        # Set all events to be terminal and to trigger on both directions of crossing
-        for event in [cross_x_axis, leave_interval, cross_Cu, cross_Cl]:
-            event.terminal = True
-            event.direction = 0
-        events = [cross_x_axis, leave_interval, cross_Cu, cross_Cl]
         
         # Line 4:
         # Loop though each interval from x_start and x_end inclusive
@@ -439,8 +486,8 @@ class ReachabilityCalculator:
                             else:
                                 print("6: y on lower boundary")
                                 
-                        # Extract part of boundary within the interval
-                        V_slice = HelperFunctions.slice(V, interval)
+                        # Extract the part of boundary within the interval starting from y.
+                        V_slice = HelperFunctions.slice(V, [y[0], interval[1]])
                         if V_slice.size == 0:
                             raise ValueError(f"No boundary points found in V_slice i.e no boundary points were found between the interval {interval[0]:.6f} and {interval[1]:.6f}.")
                         # Convert from array to set
@@ -460,18 +507,7 @@ class ReachabilityCalculator:
                             print("y not on boundary")
                         # Integrate backwards in time from y with control u
                         # until crossing a boundary or reaching the interval end
-                        # Initial state
-                        x0 = np.array([y[0], y[1]])
-                        # Solve ODE
-                        T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=events, dense_output=True, rtol=1e-6, atol=1e-8)
-                        T_b.message
-                        # Set the last valid time before the event
-                        t_end = T_b.t[-1]
-                        # Create a dense time array for smooth plotting
-                        t_dense = np.linspace(T_b.t[0], t_end, 500)
-                        # Evaluate the solution at dense time points and transpose for easier plotting
-                        # T_b = array of (x1, x2) pairs along the trajectory
-                        T_b = T_b.sol(t_dense).T
+                        T_b = self.integrate(y, u, interval[1], direction='backward')
                         
                         # If no trajectory points found, raise error
                         if len(T_b) == 0:
@@ -485,7 +521,7 @@ class ReachabilityCalculator:
                             print(f"9: T_I extracted with {len(T_I)} pts")
                         # If no trajectory points found in the interval, raise error
                         if len(T_I) == 0:
-                            raise ValueError(f"No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
+                            raise ValueError(f"9: No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
                             
                         # Initialise array to hold intersection points
                         intersection_pts = np.array([])
@@ -551,44 +587,41 @@ class ReachabilityCalculator:
                         print("17: In I_out")
                     # Line 18: If y is on the upper or lower boundary
                     if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
-                        # Line 19: y = (y1, y2 + delta)
-                        y = np.array([y[0], y[1] + delta])
                         if debug:
                             if self.is_on_upper_boundary(y):
                                 print("18: y on upper boundary")
                             else:
                                 print("18: y on lower boundary")
+                        
+                        # Line 19: y = (y1, y2 + delta)
+                        y = np.array([y[0], y[1] + delta])
+                        
+                        if debug:
                             print(f"19: y updated to: {y[0]:.6f}, {y[1]:.6f}")
                     
                     # Integrate backwards in time from y with control u
                     # until crossing a boundary or reaching the interval end
-                    # Initial state
-                    x0 = np.array([y[0], y[1]])
-                    # Solve ODE
-                    T_b = solve_ivp(dynamics_func, t_span, x0, method='RK45', events=events, dense_output=True, rtol=1e-6, atol=1e-8)
-                    # Set the last valid time before the event
-                    t_end = T_b.t[-1]
-                    # Create a dense time array for smooth plotting
-                    t_dense = np.linspace(T_b.t[0], t_end, 500)
-                    # Evaluate the solution at dense time points and transpose for easier plotting
-                    # T_b = array of (x1, x2) pairs along the trajectory
-                    T_b = T_b.sol(t_dense).T
+                    T_b = self.integrate(y, u, interval[1], direction='backward')
                     
                     # If no trajectory points found, raise error
                     if len(T_b) == 0:
                         raise ValueError("No trajectory points found.")
                     if debug:
-                            print(f"20: Trajectory integrated with {len(T_b)} pts")
+                        print(f"20: Trajectory integrated with {len(T_b)} pts")
+                        minT_b = min(T_b, key=lambda point: point[0])
+                        print(f"Left most point of trajectory T_b: {minT_b[0]:.6f}, {minT_b[1]:.6f}")
                     
                     # Line 20: Extract the part of trajectory within the interval
                     T_b_slice = HelperFunctions.slice(T_b, interval)
                     # If no trajectory points found in the interval, raise error
                     if len(T_b_slice) == 0:
-                        raise ValueError(f"No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
+                        raise ValueError(f"20: No trajectory points found in the interval [{interval[0]}, {interval[1]}].")
                     # Convert from array to set
                     T_b_slice = set(tuple(row) for row in T_b_slice)
                     if debug:
                         print(f"20: T_b_slice extracted with {len(T_b_slice)} pts")
+                        minT_b_slice = min(T_b_slice, key=lambda point: point[0])
+                        print(f"Left most point of trajectory T_b_slice: {minT_b_slice[0]:.6f}, {minT_b_slice[1]:.6f}")
                     
                     # Line 21: Z = Z and T_b_slice
                     if debug:
@@ -596,7 +629,9 @@ class ReachabilityCalculator:
                     Z = Z.union(T_b_slice)
                     if debug:
                         print(f"21: Z union completed with {len(Z)} pts")
-                
+                        minZ = min(Z, key=lambda point: point[0])
+                        print(f"Left most point of Z: {minZ[0]:.6f}, {minZ[1]:.6f}")
+                    
                 # Line 23:
                 # Update y to the left most point of Z
                 y = min(Z, key=lambda point: point[0])
@@ -607,13 +642,13 @@ class ReachabilityCalculator:
                 else:
                     loop_counter = 0
                 prev_y = y
-                # If y has not updated for 5 iterations, break to prevent infinite loop
-                if loop_counter >= 5:
+                # If y has not updated for 2 iterations, break to prevent infinite loop
+                if loop_counter >= 2:
                     if debug:
-                        print("y has not updated for 5 iterations, breaking to prevent infinite loop.")
+                        print("y has not updated for 2 iterations, breaking to prevent infinite loop.")
                         return Z
                     
-                    raise RuntimeError("y has not updated for 5 iterations, breaking to prevent infinite loop.")
+                    raise RuntimeError("y has not updated for 2 iterations, breaking to prevent infinite loop.")
                 
                 if debug:
                     print(f"23: Updated y to the left most point of Z: y: {y[0]:.6f}, {y[1]:.6f}")

@@ -1,4 +1,5 @@
 import numpy as np
+
 from scipy.optimize import minimize, LinearConstraint, fsolve
 from ManipulatorDynamics import ManipulatorDynamics
 

@@ -32,12 +32,12 @@ if __name__ == "__main__":
         # 4th segment: qB(s) + thetaB
         thetaB = np.array([54, 0])
         
-        def findS(q_start, q_end, p, theta=np.array([0, 0])):
-            """Finds the value of s for a point p on the path defined by q_start and q_end, with an optional theta offset.
+        def find_x1(q_start, q_end, p, theta=np.array([0, 0])):
+            """Finds the value of x1 for a point p on the path defined by q_start and q_end, with an optional theta offset.
             """
             direction = q_end - q_start
-            s = np.dot(p - q_start - theta, direction) / np.dot(direction, direction)
-            return s
+            x1 = np.dot(p - q_start - theta, direction) / np.dot(direction, direction)
+            return x1
         
         # # Initialise lists to store the s values for the switching points on paths A and B
         # sA = []
@@ -64,14 +64,14 @@ if __name__ == "__main__":
 
         for i, p in enumerate(qSwitch):
             if i == 0 or i == 1:
-                switching_points[i]["A"] = float(findS(qA_start, qA_end, p))
+                switching_points[i]["A"] = float(find_x1(qA_start, qA_end, p))
             elif i == 2 or i == 3:
-                switching_points[i]["A"] = float(findS(qA_start, qA_end, p, thetaA))
+                switching_points[i]["A"] = float(find_x1(qA_start, qA_end, p, thetaA))
 
             if i == 1 or i == 2:
-                switching_points[i]["B"] = float(findS(qB_start, qB_end, p))
+                switching_points[i]["B"] = float(find_x1(qB_start, qB_end, p))
             elif i == 3 or i == 4:
-                switching_points[i]["B"] = float(findS(qB_start, qB_end, p, thetaB))
+                switching_points[i]["B"] = float(find_x1(qB_start, qB_end, p, thetaB))
         print("Switching points on paths A and B:")
         for sp in switching_points:
             print(f"{sp['point']}: A: {sp['A']}, B: {sp['B']}")
@@ -85,17 +85,17 @@ if __name__ == "__main__":
         X_T4 = [switching_points[4]["B"], 0, 22]
 
         # 1. Calculate the reach-avoid set for qA(s) (used for 1st path segment)
-        reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
-        R_A = reachAvoidSetA.compute(X_Ta)
-        reachAvoidSetA.plot(True, True, True, False, True, "$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
+        # reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
+        # R_A = reachAvoidSetA.compute(X_Ta)
+        # reachAvoidSetA.plot(True, True, True, False, True, "$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
         #reachAvoidSetA.plot(False, False, True, False, False, "$q_A(s)$ Velocity Limit Curves")
         
         # 2. Calculate the reach-avoid set for qB(s)
         # Not needed in this example
-        # reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
-        # R_B = reachAvoidSetB.compute(X_Tb)
-        # # Plot RAS for qB(s)
-        # reachAvoidSetB.plot(True, True, True, False, True, "$q_B(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
+        reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end, debug=False)
+        R_B = reachAvoidSetB.compute(X_Tb)
+        # Plot RAS for qB(s)
+        reachAvoidSetB.plot(True, True, True, True, True, "$q_B(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
         #reachAvoidSetB.plot(False, False, True, False, False, "$q_B(s)$ Velocity Limit Curves")
         
         # 3. Check if the 1st and 2nd path segments geometrically interset (the switching point) i.e share a point in the joint space.
@@ -140,19 +140,19 @@ if __name__ == "__main__":
                 return 0
             
         # 12. Implement a controller to go from the start of the path switching path to the 1st switching point, p(1) -> qA
-        aZu, aZl = reachAvoidSetA.get_boundary_functions()
-        aL, aU = lambda x: reachAvoidSetA.simulator.get_accel_bounds(x)
-        uA = lambda x: aL(x) + control_law(x, aZu, aZl) * (aU(x) - aL(x))
-        x0 = np.array([0, 0])
-        trajectory = reachAvoidSetA._integrate(x0, u=uA, direction="forward", x1_target=switching_points[1]["A"])
+        # aZu, aZl = reachAvoidSetA.get_boundary_functions()
+        # aL, aU = lambda x: reachAvoidSetA.simulator.get_accel_bounds(x)
+        # uA = lambda x: aL(x) + control_law(x, aZu, aZl) * (aU(x) - aL(x))
+        # x0 = np.array([0, 0])
+        # trajectory = reachAvoidSetA._integrate(x0, u=uA, direction="forward", x1_target=switching_points[1]["A"])
         
         
-        plt.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory from start to p(1)", color="blue")
+        # plt.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory from start to p(1)", color="blue")
         
-        # 13. Implement a controller to go from the 1st switching point, p(1), i.e qB(0), to the 2nd switching point, p(2) -> qB
-        bZu, bZl = reachAvoidSetB.get_boundary_functions()
-        bL, bU = lambda x: reachAvoidSetB.simulator.get_accel_bounds(x)
-        uB = lambda x: bL(x) + control_law(x, bZu, bZl) * (bU(x) - bL(x))
+        # # 13. Implement a controller to go from the 1st switching point, p(1), i.e qB(0), to the 2nd switching point, p(2) -> qB
+        # bZu, bZl = reachAvoidSetB.get_boundary_functions()
+        # bL, bU = lambda x: reachAvoidSetB.simulator.get_accel_bounds(x)
+        # uB = lambda x: bL(x) + control_law(x, bZu, bZl) * (bU(x) - bL(x))
         
         # 14. Implement a controller to go from the 2nd switching point, p(2), to the 3rd switching point, p(3) -> qA
         

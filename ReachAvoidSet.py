@@ -120,67 +120,6 @@ class ReachAvoidSet:
             print(f"Lipschitz constant: {self._lipschitz_const:.4f}")
             print(f"Safety margin applied to C_u: {safety_diff:.6f}")
 
-    def _make_events(self, x1_target: float):
-        """
-        Creates and configures ODE stop event functions.
-        
-        Args:
-            x1_target: The x1 value at which to stop integration.
-        """
-        
-        # Stop when crossing the x-axis (x2=0)
-        cross_x_axis = ReachabilityCalculator.event_x2_zero
-        # Stop when crossing x1_target
-        cross_x1_target = lambda t, x, xt=x1_target: ReachabilityCalculator.event_x1_cross(t, x, xt)
-        # Stop when crossing the boundary functions C_u and C_l
-        cross_Cu = lambda t, x, Cu=self._C_u: ReachabilityCalculator.event_Cu_cross(t, x, Cu)
-        cross_Cl = lambda t, x, Cl=self._C_l: ReachabilityCalculator.event_Cl_cross(t, x, Cl)
-        
-        # Set all events to be terminal and to trigger on both directions of crossing
-        for event in [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]:
-            event.terminal = True
-            event.direction = 0
-
-        return [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]
-
-    def _integrate(self, x0: np.ndarray, u: int, x1_target: float, direction: str) -> np.ndarray:
-        """
-        Integrates the system dynamics from x0 until an event occurs.
-
-        Args:
-            x0: Initial state [x1, x2].
-            u: Control input (0=max decel L, 1=max accel U).
-            x1_target: x1 value at which to stop integration.
-            direction: 'forward' or 'backward'.
-            
-
-        Returns:
-            Array of shape (N, 2) containing the trajectory.
-        """
-        
-        # Define the dynamics function for integration based on the control input and direction
-        dynamics = lambda t, x: self.simulator.get_double_integrator_dynamics(t, x, direction, u)
-        # Create event functions for stopping conditions
-        events = self._make_events(x1_target)
-        # Large time span to ensure we integrate until an event occurs
-        tspan = (0.0, 10.0)
-        # Integrate the dynamics using solve_ivp with the defined events
-        sol = solve_ivp(
-            dynamics,
-            tspan,
-            x0,
-            method="RK45",
-            events=events,
-            dense_output=True,
-            rtol=1e-6,
-            atol=1e-8,
-        )
-        # Create a dense time array for smooth trajectories up to the event time
-        t_dense = np.linspace(sol.t[0], sol.t[-1], 500)
-        
-        # Return the trajectory as an array of shape (N, 2)
-        return sol.sol(t_dense).T
-
     def compute(self, X_T: list) -> set:
         """
         Computes the reach-avoid set for a given target set i.e R(X_T).
@@ -200,8 +139,8 @@ class ReachAvoidSet:
         x0_l = np.array([X_T[0], x2_min])
 
         # Backward trajectories from top and bottom of target set. Array of (x1, x2) pairs.
-        T_star_u_arr = self._integrate(x0_u, u=0, x1_target=0.0, direction="backward")
-        T_star_l_arr = self._integrate(x0_l, u=1, x1_target=0.0, direction="backward")
+        T_star_u_arr = self._reach_calc.integrate(x0_u, u=0, x1_target=0.0, direction="backward")
+        T_star_l_arr = self._reach_calc.integrate(x0_l, u=1, x1_target=0.0, direction="backward")
         # Store the backward trajectories for later use in plotting
         self._T_star_u_arr = T_star_u_arr
         self._T_star_l_arr = T_star_l_arr
@@ -215,10 +154,33 @@ class ReachAvoidSet:
         self._x_d = x_d
         self._x_a = x_a
         
-        if self._debug:
+        if False:
             print(f"Target set X_T: {self._X_T}")
             print(f"x_d: {x_d[0]:.6f}, {x_d[1]:.6f}")
             print(f"x_a: {x_a[0]:.6f}, {x_a[1]:.6f}")
+            
+            # Create the plot and set the labels and title
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.set_xlabel("$x_1$")
+            ax.set_ylabel("$x_2$")
+            ax.set_title("Backward Trajectories from Target Set")
+            ax.grid(True)
+            
+            # Target set
+            ax.vlines(X_T[0], X_T[1], X_T[2], colors="orange", label="$\\mathcal{X}_T$")
+            ax.plot(X_T[0], X_T[2], "ko")
+            ax.plot(X_T[0], X_T[1], "ko")
+                
+            # Plot the backward trajectories from the top and bottom of the target set
+            ax.plot(self._T_star_u_arr[:, 0], self._T_star_u_arr[:, 1], "c-", label="$T^*_u$")
+            ax.plot(self._T_star_l_arr[:, 0], self._T_star_l_arr[:, 1], "y-", label="$T^*_l$")
+            ax.plot(*self._x_d, "ks", label="$x_d$")
+            ax.plot(*self._x_a, "k^", label="$x_a$")
+            
+            # Set the legend and show the plot
+            ax.legend()
+            plt.tight_layout()
+            plt.show()
 
         # Initialise the reachability calculator
         reach_calc = self._reach_calc
@@ -259,7 +221,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
                 Z_l = T_star_l
-                
+            
             # If x_d is on the upper boundary
             if on_upper_d:
                 if self._debug:
@@ -320,7 +282,6 @@ class ReachAvoidSet:
 
         # Plot shaded intervals of S(x) sign if requested
         if show_intervals:
-            
             # TODO: If there are no roots skip with a debug comment 
             x1_star = self._x1_star
             # Find the roots of S(x)
