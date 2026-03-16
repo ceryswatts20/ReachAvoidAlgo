@@ -221,7 +221,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
                 Z_l = T_star_l
-                
+            
             # If x_d is on the upper boundary
             if on_upper_d:
                 if self._debug:

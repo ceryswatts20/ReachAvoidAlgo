@@ -32,12 +32,12 @@ if __name__ == "__main__":
         # 4th segment: qB(s) + thetaB
         thetaB = np.array([54, 0])
         
-        def findS(q_start, q_end, p, theta=np.array([0, 0])):
-            """Finds the value of s for a point p on the path defined by q_start and q_end, with an optional theta offset.
+        def find_x1(q_start, q_end, p, theta=np.array([0, 0])):
+            """Finds the value of x1 for a point p on the path defined by q_start and q_end, with an optional theta offset.
             """
             direction = q_end - q_start
-            s = np.dot(p - q_start - theta, direction) / np.dot(direction, direction)
-            return s
+            x1 = np.dot(p - q_start - theta, direction) / np.dot(direction, direction)
+            return x1
         
         # # Initialise lists to store the s values for the switching points on paths A and B
         # sA = []
@@ -64,14 +64,14 @@ if __name__ == "__main__":
 
         for i, p in enumerate(qSwitch):
             if i == 0 or i == 1:
-                switching_points[i]["A"] = float(findS(qA_start, qA_end, p))
+                switching_points[i]["A"] = float(find_x1(qA_start, qA_end, p))
             elif i == 2 or i == 3:
-                switching_points[i]["A"] = float(findS(qA_start, qA_end, p, thetaA))
+                switching_points[i]["A"] = float(find_x1(qA_start, qA_end, p, thetaA))
 
             if i == 1 or i == 2:
-                switching_points[i]["B"] = float(findS(qB_start, qB_end, p))
+                switching_points[i]["B"] = float(find_x1(qB_start, qB_end, p))
             elif i == 3 or i == 4:
-                switching_points[i]["B"] = float(findS(qB_start, qB_end, p, thetaB))
+                switching_points[i]["B"] = float(find_x1(qB_start, qB_end, p, thetaB))
         print("Switching points on paths A and B:")
         for sp in switching_points:
             print(f"{sp['point']}: A: {sp['A']}, B: {sp['B']}")

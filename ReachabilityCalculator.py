@@ -507,9 +507,7 @@ class ReachabilityCalculator:
                             print("y not on boundary")
                         # Integrate backwards in time from y with control u
                         # until crossing a boundary or reaching the interval end
-                        # Initial state
-                        x0 = np.array([y[0], y[1]])
-                        T_b = self.integrate(x0, u, interval[1], direction='backward')
+                        T_b = self.integrate(y, u, interval[1], direction='backward')
                         
                         # If no trajectory points found, raise error
                         if len(T_b) == 0:
@@ -589,26 +587,29 @@ class ReachabilityCalculator:
                         print("17: In I_out")
                     # Line 18: If y is on the upper or lower boundary
                     if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
-                        # Line 19: y = (y1, y2 + delta)
-                        y = np.array([y[0], y[1] + delta])
                         if debug:
                             if self.is_on_upper_boundary(y):
                                 print("18: y on upper boundary")
                             else:
                                 print("18: y on lower boundary")
+                        
+                        # Line 19: y = (y1, y2 + delta)
+                        y = np.array([y[0], y[1] + delta])
+                        
+                        if debug:
                             print(f"19: y updated to: {y[0]:.6f}, {y[1]:.6f}")
                     
                     # Integrate backwards in time from y with control u
                     # until crossing a boundary or reaching the interval end
-                    # Initial state
-                    x0 = np.array([y[0], y[1]])
-                    T_b = self.integrate(x0, u, interval[1], direction='backward')
+                    T_b = self.integrate(y, u, interval[1], direction='backward')
                     
                     # If no trajectory points found, raise error
                     if len(T_b) == 0:
                         raise ValueError("No trajectory points found.")
                     if debug:
-                            print(f"20: Trajectory integrated with {len(T_b)} pts")
+                        print(f"20: Trajectory integrated with {len(T_b)} pts")
+                        minT_b = min(T_b, key=lambda point: point[0])
+                        print(f"Left most point of trajectory T_b: {minT_b[0]:.6f}, {minT_b[1]:.6f}")
                     
                     # Line 20: Extract the part of trajectory within the interval
                     T_b_slice = HelperFunctions.slice(T_b, interval)
@@ -619,6 +620,8 @@ class ReachabilityCalculator:
                     T_b_slice = set(tuple(row) for row in T_b_slice)
                     if debug:
                         print(f"20: T_b_slice extracted with {len(T_b_slice)} pts")
+                        minT_b_slice = min(T_b_slice, key=lambda point: point[0])
+                        print(f"Left most point of trajectory T_b_slice: {minT_b_slice[0]:.6f}, {minT_b_slice[1]:.6f}")
                     
                     # Line 21: Z = Z and T_b_slice
                     if debug:
@@ -626,6 +629,8 @@ class ReachabilityCalculator:
                     Z = Z.union(T_b_slice)
                     if debug:
                         print(f"21: Z union completed with {len(Z)} pts")
+                        minZ = min(Z, key=lambda point: point[0])
+                        print(f"Left most point of Z: {minZ[0]:.6f}, {minZ[1]:.6f}")
                     
                 # Line 23:
                 # Update y to the left most point of Z
