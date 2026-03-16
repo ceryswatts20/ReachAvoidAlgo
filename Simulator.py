@@ -151,7 +151,7 @@ class Simulator:
         A callable function representing the polynomial and its coefficients.
     """
     @staticmethod
-    def create_constrained_polynomial(x1_data, v_data, degree):
+    def _create_constrained_polynomial(x1_data, v_data, degree):
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(x1_data, degree + 1)
         
@@ -181,4 +181,26 @@ class Simulator:
         
         # Return both the function and its coefficients
         return lambda x1: np.polyval(c_optimal, x1), c_optimal
+    
+    def create_boundary_function(self, x1_pts, boundary_pts, lipschitz_const: float, degree: int = 10):
+        
+        # If boundary_pts is a set
+        if isinstance(boundary_pts, set):
+            print(f"Boundary_pts: {boundary_pts}")
+            
+            # Sort the boundary points by their x1 values to ensure correct ordering for polynomial fitting
+            boundary_pts = np.array(sorted(boundary_pts))
+        print(f"Shape of boundary_pts: {boundary_pts.shape}")
+        
+        _, coeffs = self._create_constrained_polynomial(x1_pts, boundary_pts, degree)
+        
+        # Safety margin based on Lipschitz constant
+        safety_diff = lipschitz_const * (x1_pts[1] - x1_pts[0]) / 2
+        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
+        coeffs_adjusted = coeffs.copy()
+        coeffs_adjusted[-1] -= safety_diff
+        # Create the adjusted boundary function with the safety margin
+        boundary = lambda x1: np.polyval(coeffs_adjusted, x1)
+        
+        return boundary, coeffs_adjusted
     

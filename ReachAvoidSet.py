@@ -25,7 +25,6 @@ class ReachAvoidSet:
 
         # Initialise variables to store results
         self._X_T = None
-        self._R_X_T = None
         self._Z_u = None
         self._Z_l = None
         self._T_star_u_arr = None
@@ -98,27 +97,16 @@ class ReachAvoidSet:
         V_u = self.simulator.calculate_upper_boundary(x1_star, 30.0)
         # Set lower boundary set to zero
         V_l = np.zeros_like(V_u)
-        # Fit polynomial to upper boundary set to get C_u(x1)
-        _, C_u_coeffs = Simulator.create_constrained_polynomial(x1_star, V_u, degree=poly_degree)
-
-        # Safety margin based on Lipschitz constant
-        safety_diff = self._lipschitz_const * (x1_star[1] - x1_star[0]) / 2
-        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
-        C_u_coeffs_adjusted = C_u_coeffs.copy()
-        C_u_coeffs_adjusted[-1] -= safety_diff
-        # Create the adjusted C_u function with the safety margin
-        self._C_u = lambda x1: np.polyval(C_u_coeffs_adjusted, x1)
+        # Fit polynomial to upper boundary set to get C_u(x1) with a safety margin based on the Lipschitz constant
+        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(x1_star, V_u, self._lipschitz_const)
+        
         self._C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
-        # Store the coefficients for later use in reachability calculations
-        self._C_u_coeffs = C_u_coeffs_adjusted
         self._C_l_coeffs = np.zeros(poly_degree + 1)
         self._V_u = V_u
         self._V_l = V_l
-        self._safety_diff = safety_diff
         
         if self._debug:
             print(f"Lipschitz constant: {self._lipschitz_const:.4f}")
-            print(f"Safety margin applied to C_u: {safety_diff:.6f}")
 
     def compute(self, X_T: list) -> set:
         """
@@ -236,10 +224,12 @@ class ReachAvoidSet:
         # Save the computed sets for later use in plotting
         self._Z_u = Z_u
         self._Z_l = Z_l
-        self._R_X_T = Z_l.intersection(Z_u)
 
-        # Return the reach-avoid set as a set of (x1, x2) tuples
-        return self._R_X_T
+        # Return the reach-avoid set
+        return {
+            'Z_u': Z_u,
+            'Z_l': Z_l
+        }
 
     def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
         """
@@ -255,7 +245,7 @@ class ReachAvoidSet:
             RuntimeError: If compute() has not been called yet.
         """
         
-        if show_reach_avoid and self._R_X_T is None:
+        if show_reach_avoid and (self._Z_l is None or self._Z_u is None):
             raise RuntimeError("To plot the reach-avoid set and/or the target set, call compute() before plot().")
 
         X_T = self._X_T
@@ -370,29 +360,7 @@ class ReachAvoidSet:
         plt.tight_layout()
         plt.show()
         
-    def get_boundary_functions(self, poly_degree: int = 10):
-        """ Creates boundary function for reach-avoid set boundaries Zu and Zl
-
-        Args:
-            poly_degree (int, optional): _description_. Defaults to 10.
-
-        Returns:
-            
-        """
-        x1_star = self._x1_star
-        Z_u_arr = np.array(sorted(self._Z_u))
-        _, Z_u_coeffs = Simulator.create_constrained_polynomial(x1_star, Z_u_arr, degree=poly_degree)
-        
-        # Safety margin based on Lipschitz constant
-        safety_diff = self._lipschitz_const * (x1_star[1] - x1_star[0]) / 2
-        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
-        Z_u_coeffs_adjusted = Z_u_coeffs.copy()
-        Z_u_coeffs_adjusted[-1] -= safety_diff
-        # Create the adjusted C_u function with the safety margin
-        Z_u = lambda x1: np.polyval(Z_u_coeffs_adjusted, x1)
-        Z_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
-        
-        return Z_u, Z_l
+    
 
 if __name__ == "__main__":
     q_start = np.array([0, 0])
