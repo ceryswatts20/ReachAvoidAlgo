@@ -230,6 +230,16 @@ class ReachAvoidSet:
             'Z_u': Z_u,
             'Z_l': Z_l
         }
+        
+    def getTargetSet(self, x1):
+        """Creates the maxmimum feasible target set at a given x1 point."""
+        
+        # Get the minimum x2 value at x1
+        min_x2 = float(self._C_l(x1))
+        # Get the maximum x2 value at x1
+        max_x2 = float(self._C_u(x1))
+        
+        return [x1, min_x2, max_x2]
 
     def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
         """
