@@ -98,7 +98,7 @@ class ReachAvoidSet:
         # Set lower boundary set to zero
         V_l = np.zeros_like(V_u)
         # Fit polynomial to upper boundary set to get C_u(x1) with a safety margin based on the Lipschitz constant
-        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(x1_star, V_u, self._lipschitz_const)
+        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(V_u, self._lipschitz_const, x1_star)
         
         self._C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
         self._C_l_coeffs = np.zeros(poly_degree + 1)
@@ -231,13 +231,13 @@ class ReachAvoidSet:
             'Z_l': Z_l
         }
         
-    def getTargetSet(self, x1):
+    def getTargetSet(self, x1, tol=1e-2):
         """Creates the maxmimum feasible target set at a given x1 point."""
         
         # Get the minimum x2 value at x1
-        min_x2 = float(self._C_l(x1))
+        min_x2 = float(self._C_l(x1)) + tol
         # Get the maximum x2 value at x1
-        max_x2 = float(self._C_u(x1))
+        max_x2 = float(self._C_u(x1)) - tol
         
         return [x1, min_x2, max_x2]
 
