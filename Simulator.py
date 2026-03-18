@@ -100,7 +100,7 @@ class Simulator:
         return V_u
     
     
-    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int) -> np.ndarray:
+    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int | float) -> np.ndarray:
         # Matrix A (2x2)
         A = np.array([[0, 1],
                       [0, 0]])
@@ -116,27 +116,12 @@ class Simulator:
         
         # Integrating forwards in time
         if direction == 'forward':
-            # Max decceleration dynamics (L)
-            if u == 0:
-                return A @ x + B * L
-            # Max acceleration dynamics (U)
-            elif u == 1:
-                return A @ x + B * U
-            # Error handling
-            else:
-                raise ValueError("u must be 0 or 1 for this function.")
+            return A @ x + B * (L + u*(U - L))
+        # Integrating backwards in time
         elif direction == 'backward':
-            # Min decceleration dynamics (L)
-            if u == 0:
-                return -A @ x - B * L
-            # Max acceleration dynamics (U)
-            elif u == 1:
-                return -A @ x - B * U
-            # Error handling
-            else:
-                raise ValueError("u must be 0 or 1 for this function.")
+            return -A @ x - B * (L + u*(U - L))
         else:
-            raise ValueError("direction must be 'forward' or 'backward' for this function.")
+            raise ValueError("Simulator.get_double_integrator_dynamics(): Direction must be 'forward' or 'backward' for this function.")
     
     """
     Creates a polynomial approximation P(x1) for a given set, v_data, at x1 using
