@@ -151,7 +151,7 @@ class Simulator:
         A callable function representing the polynomial and its coefficients.
     """
     @staticmethod
-    def _create_constrained_polynomial(x1_data, v_data, degree):
+    def _create_constrained_polynomial(x1_data: np.ndarray, v_data: np.ndarray, degree: int):
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(x1_data, degree + 1)
         
@@ -182,15 +182,12 @@ class Simulator:
         # Return both the function and its coefficients
         return lambda x1: np.polyval(c_optimal, x1), c_optimal
     
-    def create_boundary_function(self, x1_pts, boundary_pts, lipschitz_const: float, degree: int = 10):
+    def create_boundary_function(self, boundary_pts, lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
         
         # If boundary_pts is a set
         if isinstance(boundary_pts, set):
-            print(f"Boundary_pts: {boundary_pts}")
-            
-            # Sort the boundary points by their x1 values to ensure correct ordering for polynomial fitting
-            boundary_pts = np.array(sorted(boundary_pts))
-        print(f"Shape of boundary_pts: {boundary_pts.shape}")
+            # Convert set of (x1, x2) tuples to 2 arrays of x1 and x2 pts
+            x1_pts, boundary_pts = np.array(list(zip(*sorted(boundary_pts))))
         
         _, coeffs = self._create_constrained_polynomial(x1_pts, boundary_pts, degree)
         

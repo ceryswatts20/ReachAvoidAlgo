@@ -1,3 +1,5 @@
+from typing import Callable
+
 import numpy as np
 from scipy.optimize import root_scalar
 from scipy.integrate import solve_ivp
@@ -409,7 +411,7 @@ class ReachabilityCalculator:
         TODO: Write method description
         
         Args:
-            V (callable): The boundary function (C_u or C_l).
+            V (Callable): The boundary function (C_u or C_l).
             x_end (float): The end of the interval.
             x_start (float): The start of the interval.
             u (int): Control input, 0 for max decceleration L, 1 for max acceleration U.
@@ -419,7 +421,7 @@ class ReachabilityCalculator:
         Returns:
             set: 
     """
-    def extend(self, V: callable, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
+    def extend(self, V: Callable, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
         # Line 1: Inputs not defined in the method signature
         x_points = np.linspace(0, 1, 101)
         # Find roots of S(x) on both boundaries
