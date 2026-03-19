@@ -107,9 +107,10 @@ class ReachabilityCalculator:
         x_points (np.ndarray): The discrete x1-points to check for sign changes.
 
     Returns:
-        tuple[list, list]: A tuple containing:
-            - lowerRoots (list): Sorted roots found on lower boundary
-            - upperRoots (list): Sorted roots found on upper boundary
+        tuple[list, list, list]: A tuple containing:
+            - lowerRoots (list): Sorted roots found on lower boundary.
+            - upperRoots (list): Sorted roots found on upper boundary.
+            - roots (list): Sorted roots found on both boundaries.
     """   
     def find_S_roots(self, x_points: np.ndarray) -> list:
         # Evaluate S at all s points to find sign changes
@@ -168,9 +169,10 @@ class ReachabilityCalculator:
         # Convert roots to sorted lists
         lowerRoots = sorted(list(roots_S_lower) + [0, 1])
         upperRoots = sorted(list(roots_S_upper) + [0, 1])
+        roots = sorted(list(set(lowerRoots + upperRoots)))
         
         # Return the roots found on the lower and upper boundary
-        return lowerRoots, upperRoots
+        return lowerRoots, upperRoots, roots
     
     """
     Generates the partition I and the interval sets I_in, I_out based on the roots of S(x).
@@ -420,6 +422,7 @@ class ReachabilityCalculator:
         
         Args:
             V (Callable): The boundary function (C_u or C_l).
+            roots (list): S(x) roots found on the boundaries.
             x_end (float): The end of the interval.
             x_start (float): The start of the interval.
             u (int): Control input, 0 for max decceleration L, 1 for max acceleration U.
@@ -429,13 +432,10 @@ class ReachabilityCalculator:
         Returns:
             set: 
     """
-    def extend(self, V: Callable, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
+    def extend(self, V: Callable, roots: list, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
         # Line 1: Inputs not defined in the method signature
-        x_points = np.linspace(0, 1, 101)
-        # Find roots of S(x) on both boundaries
-        lower_roots, upper_roots = self.find_S_roots(x_points)
         # Generate partition
-        I_in, I_out, I = self.generate_partition_I(roots)
+        I_in, I_out, I = self.generate_partition_I(roots, V)
         # Initialise delta
         delta = (-1)**(u+1) * e
         

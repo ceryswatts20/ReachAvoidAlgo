@@ -56,8 +56,7 @@ if __name__ == "__main__":
 
         print("\n--- Finding roots of S(x) on the boundaries ---")
         reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs, C_l_coeffs)
-        roots_lower, roots_upper = reach_calc.find_S_roots(x1_star)
-        roots = sorted(list(set(roots_lower + roots_upper)))
+        roots_lower, roots_upper, roots = reach_calc.find_S_roots(x1_star)
         
         # Print the results
         if roots_lower:

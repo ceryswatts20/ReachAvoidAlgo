@@ -172,6 +172,8 @@ class ReachAvoidSet:
 
         # Initialise the reachability calculator
         reach_calc = self._reach_calc
+        # Generate partition
+        _, _, roots = reach_calc.find_S_roots(self._x1_star)
         # Initialise sets Z_u and Z_l
         Z_u = set()
         Z_l = set()
@@ -186,14 +188,14 @@ class ReachAvoidSet:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self._C_l, x_d, x_a, 1, debug=self._debug))
+            Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, x_d, x_a, 1, debug=self._debug))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self._C_u, x_d, x_a, 0, debug=self._debug))
+            Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, x_d, x_a, 0, debug=self._debug))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -204,7 +206,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is on the lower boundary.")
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self._C_l, [0, 0], x_a, 1, debug=self._debug))
+                Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, [0, 0], x_a, 1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -215,7 +217,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self._C_u, [0, 0], x_d, 0, debug=self._debug))
+                Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, [0, 0], x_d, 0, debug=self._debug))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")
@@ -285,7 +287,7 @@ class ReachAvoidSet:
             # TODO: If there are no roots skip with a debug comment 
             x1_star = self._x1_star
             # Find the roots of S(x)
-            roots = self._reach_calc.find_S_roots(x1_star)
+            lower_roots, upper_roots, roots = self._reach_calc.find_S_roots(x1_star)
             # Generate intervals of x1 where S(x) is positive or negative based on the roots
             I_in, I_out, _ = self._reach_calc.generate_partition_I(roots)
             

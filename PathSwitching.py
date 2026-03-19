@@ -157,7 +157,7 @@ if __name__ == "__main__":
         
         # Calculate the reach-avoid set for given paths - used to create path segment target sets
         reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
-        reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end, debug=False)
+        reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
         
         # Create target sets
         X_Ta = reachAvoidSetA.getTargetSet(1)
@@ -177,7 +177,7 @@ if __name__ == "__main__":
         # Path Segment 1 RAS
         R_A = reachAvoidSetA.compute(X_Ta)
         # reachAvoidSetA.plot(False, False, True, False, False, "$q_A(s)$ Velocity Limit Curves")
-        # reachAvoidSetA.plot(True, True, True, False, True, "$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
+        reachAvoidSetA.plot(True, True, True, False, True, "$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
         
         # R_B = reachAvoidSetB.compute(X_Tb)
         # reachAvoidSetB.plot(True, True, True, True, True, "$q_B(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
