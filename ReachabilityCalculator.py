@@ -107,7 +107,9 @@ class ReachabilityCalculator:
         x_points (np.ndarray): The discrete x1-points to check for sign changes.
 
     Returns:
-        List containing roots on the upper and lower boundary.
+        tuple[list, list]: A tuple containing:
+            - lowerRoots (list): Sorted roots found on lower boundary
+            - upperRoots (list): Sorted roots found on upper boundary
     """   
     def find_S_roots(self, x_points: np.ndarray) -> list:
         # Evaluate S at all s points to find sign changes
@@ -163,20 +165,25 @@ class ReachabilityCalculator:
             # Add the last point as a root
             roots_S_lower.add(x_points[-1])
         
-        # Return sorted, unique roots
-        return sorted(list(roots_S_upper.union(roots_S_lower)) + [0, 1])
+        # Convert roots to sorted lists
+        lowerRoots = sorted(list(roots_S_lower) + [0, 1])
+        upperRoots = sorted(list(roots_S_upper) + [0, 1])
+        
+        # Return the roots found on the lower and upper boundary
+        return lowerRoots, upperRoots
     
     """
     Generates the partition I and the interval sets I_in, I_out based on the roots of S(x).
     
     Args:
         roots (list): List of roots of S(x).
+        boundary (Callable): The boundary function the roots are on.
         tolerance (float): Small value to check the sign of S(x) just before the root.
         
     Returns:
         A tuple containing three lists: (I_in, I_out, I).
     """
-    def generate_partition_I(self, roots: list, tolerance=1e-6) -> tuple[list, list, list]:
+    def generate_partition_I(self, roots: list, boundary: Callable, tolerance=1e-6) -> tuple[list, list, list]:
         # Initialise lists for intervals
         I_in, I_out, I = [], [], []
         
@@ -193,7 +200,8 @@ class ReachabilityCalculator:
                 # Small step back from the end of the interval
                 x1_before_end = x1_end - tolerance
                 # Check the sign of S just before the end of the interval
-                s_before = self.calculate_S(np.array([x1_before_end, self.C_u(x1_before_end)]))
+                # s_before = self.calculate_S(np.array([x1_before_end, self.C_u(x1_before_end)]))
+                s_before = self.calculate_S(np.array([x1_before_end, boundary(x1_before_end)]))
                 # True if S(x) <= 0, False if S(x) > 0
                 interval_sign = (s_before <= 0)
                 #print(f"Interval [{x1_start:.6f}, {x1_end:.6f}] - S just before end: {s_before:.6f} - S(x) <= 0: {interval_sign}")
@@ -425,7 +433,7 @@ class ReachabilityCalculator:
         # Line 1: Inputs not defined in the method signature
         x_points = np.linspace(0, 1, 101)
         # Find roots of S(x) on both boundaries
-        roots = self.find_S_roots(x_points)
+        lower_roots, upper_roots = self.find_S_roots(x_points)
         # Generate partition
         I_in, I_out, I = self.generate_partition_I(roots)
         # Initialise delta

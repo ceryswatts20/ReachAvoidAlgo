@@ -1,3 +1,5 @@
+from typing import Set
+
 import numpy as np
 
 from scipy.optimize import minimize, LinearConstraint, fsolve
@@ -167,12 +169,38 @@ class Simulator:
         # Return both the function and its coefficients
         return lambda x1: np.polyval(c_optimal, x1), c_optimal
     
-    def create_boundary_function(self, boundary_pts, lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
+    def create_boundary_function(self, boundary_pts: (np.ndarray | Set), lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
+        """
+        Create a polynomial boundary function with a safety margin.
+        
+        Fits a polynomial to boundary points and applies a safety margin based on
+        the Lipschitz constant to ensure feasibility.
+        
+        Args:
+            boundary_pts (np.ndarray | Set): Boundary points. Either a numpy array
+                of x2 values or a set of (x1, x2) tuples. If set, tuples are 
+                automatically sorted and unpacked.
+            lipschitz_const (float): Lipschitz constant for safety margin calculation.
+            x1_pts (np.ndarray, optional): x1 coordinate points. Required if 
+                boundary_pts is a numpy array. Defaults to None.
+            degree (int, optional): Polynomial degree. Defaults to 10.
+        
+        Returns:
+            tuple: A tuple containing:
+                - boundary (callable): Lambda function of the adjusted boundary 
+                polynomial, takes x1 and returns x2 value.
+                - coeffs_adjusted (np.ndarray): Adjusted polynomial coefficients
+                with safety margin applied.
+        """
         
         # If boundary_pts is a set
         if isinstance(boundary_pts, set):
             # Convert set of (x1, x2) tuples to 2 arrays of x1 and x2 pts
             x1_pts, boundary_pts = np.array(list(zip(*sorted(boundary_pts))))
+            
+        # If there are no x1_pts then a polynomial can't be created
+        if x1_pts is None:
+            raise ValueError("Simulator.create_boundary_function(): x1_pts required when boundary_pts is ndarray")
         
         _, coeffs = self._create_constrained_polynomial(x1_pts, boundary_pts, degree)
         
