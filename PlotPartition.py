@@ -79,10 +79,9 @@ if __name__ == "__main__":
                 print(f" {root:.6f}")
         
         print("\n--- Generating Partition I ---")
-        tolerance = 1e-6
         # Initialise lists for intervals
-        I_in_lower, I_out_lower, I_lower = reach_calc.generate_partition_I(roots_lower, C_l, tolerance)
-        I_in_upper, I_out_upper, I_upper = reach_calc.generate_partition_I(roots_upper, C_u, tolerance)
+        I_in_lower, I_out_lower, I_lower = reach_calc.generate_partition_I(roots_lower, C_l)
+        I_in_upper, I_out_upper, I_upper = reach_calc.generate_partition_I(roots_upper, C_u)
         
         print("\nIntervals where S(x) <= 0 (I_in) on the lower boundary:")
         for interval in I_in_lower:

@@ -284,28 +284,47 @@ class ReachAvoidSet:
 
         # Plot shaded intervals of S(x) sign if requested
         if show_intervals:
-            # TODO: If there are no roots skip with a debug comment 
             x1_star = self._x1_star
             # Find the roots of S(x)
             lower_roots, upper_roots, roots = self._reach_calc.find_S_roots(x1_star)
             # Generate intervals of x1 where S(x) is positive or negative based on the roots
-            I_in, I_out, _ = self._reach_calc.generate_partition_I(roots)
+            I_in_lower, I_out_lower, I_lower = self._reach_calc.generate_partition_I(lower_roots, self._C_l)
+            I_in_upper, I_out_upper, I_upper = self._reach_calc.generate_partition_I(upper_roots, self._C_u)
             
-            if self._debug:
-                print(f"Found roots: {roots}")
-                print(f"I_in: {I_in}")
-                print(f"I_out: {I_out}")
+            if True:
+                print(f"{roots}")
+                print(f"Found lower roots: {lower_roots}")
+                print(f"I_in lower boundary: {I_in_lower}")
+                print(f"I_out lower boundary: {I_out_lower}")
+                print(f"Found upper roots: {upper_roots}")
+                print(f"I_in upper boundary: {I_in_upper}")
+                print(f"I_out upper boundary: {I_out_upper}")
             
-            # Draw the vertical lines from y=0 up to the C_u curve
-            ax.vlines(x=roots, ymin=0, ymax=self._C_u(np.array(roots)), colors='green', linestyles='solid', label='Roots of $S(x)$')
+            # Draw the vertical lines from y=0 to halfway to C_u curve for lower roots
+            ax.vlines(x=lower_roots, ymin=0, ymax=(self._C_u(np.array(lower_roots))/2), colors='green', linestyles='solid', label='Roots of $S(x) on lower boudnary$')
+            # Draw the vertical lines from halfway to C_u curve to the C_u curve for upper roots
+            ax.vlines(x=upper_roots, ymax=self._C_u(np.array(upper_roots)), ymin=(self._C_u(np.array(roots))/2), colors='red', linestyles='solid', label='Roots of $S(x) on upper boudnary$')
             
             # Shade intervals where S(x) <= 0 in light green
-            # For each interval in I_in, fill between C_l and C_u
-            for i, interval in enumerate(I_in):
+            # For each interval in I_in_lower, fill between C_l and halfway to C_u
+            for i, interval in enumerate(I_in_lower):
                 mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
                 ax.fill_between(
                     x1_fine,
                     self._C_l(x1_fine),
+                    self._C_u(x1_fine)/2,
+                    where=mask,
+                    color="lightgreen",
+                    alpha=0.3,
+                    # Only label the first interval to avoid duplicate labels in the legend
+                    label="$S(x)\\leq 0$" if i == 0 else "",
+                )
+            # For each interval in I_in_upper, fill between halfway to C_u and C_u
+            for i, interval in enumerate(I_in_upper):
+                mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
+                ax.fill_between(
+                    x1_fine,
+                    self._C_u(x1_fine)/2,
                     self._C_u(x1_fine),
                     where=mask,
                     color="lightgreen",
@@ -314,11 +333,25 @@ class ReachAvoidSet:
                     label="$S(x)\\leq 0$" if i == 0 else "",
                 )
             # Shade intervals where S(x) > 0 in light coral
-            for i, interval in enumerate(I_out):
+            # For each interval in I_out_lower, fill between C_l and halfway to C_u
+            for i, interval in enumerate(I_out_lower):
                 mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
                 ax.fill_between(
                     x1_fine,
                     self._C_l(x1_fine),
+                    self._C_u(x1_fine)/2,
+                    where=mask,
+                    color="lightcoral",
+                    alpha=0.3,
+                    # Only label the first interval to avoid duplicate labels in the legend
+                    label="$S(x)>0$" if i == 0 else "",
+                )
+            # For each interval in I_out_upper, fill between halfway to C_u and C_u
+            for i, interval in enumerate(I_out_upper):
+                mask = (x1_fine >= interval[1]) & (x1_fine <= interval[0])
+                ax.fill_between(
+                    x1_fine,
+                    self._C_u(x1_fine)/2,
                     self._C_u(x1_fine),
                     where=mask,
                     color="lightcoral",
