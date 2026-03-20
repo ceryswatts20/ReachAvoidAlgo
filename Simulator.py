@@ -1,4 +1,7 @@
+from typing import Callable, Set
+
 import numpy as np
+
 from scipy.optimize import minimize, LinearConstraint, fsolve
 from ManipulatorDynamics import ManipulatorDynamics
 
@@ -99,7 +102,7 @@ class Simulator:
         return V_u
     
     
-    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int) -> np.ndarray:
+    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int | float | Callable) -> np.ndarray:
         # Matrix A (2x2)
         A = np.array([[0, 1],
                       [0, 0]])
@@ -112,30 +115,17 @@ class Simulator:
         L, U = self.get_accel_bounds(x[0], x[1])
         L = float(L)
         U = float(U)
+        # Evaluate u at current x if callable
+        u = float(u(t, x) if callable(u) else u)
         
         # Integrating forwards in time
         if direction == 'forward':
-            # Max decceleration dynamics (L)
-            if u == 0:
-                return A @ x + B * L
-            # Max acceleration dynamics (U)
-            elif u == 1:
-                return A @ x + B * U
-            # Error handling
-            else:
-                raise ValueError("u must be 0 or 1 for this function.")
+            return A @ x + B * (L + u*(U - L))
+        # Integrating backwards in time
         elif direction == 'backward':
-            # Min decceleration dynamics (L)
-            if u == 0:
-                return -A @ x - B * L
-            # Max acceleration dynamics (U)
-            elif u == 1:
-                return -A @ x - B * U
-            # Error handling
-            else:
-                raise ValueError("u must be 0 or 1 for this function.")
+            return -A @ x - B * (L + u*(U - L))
         else:
-            raise ValueError("direction must be 'forward' or 'backward' for this function.")
+            raise ValueError("Simulator.get_double_integrator_dynamics(): Direction must be 'forward' or 'backward' for this function.")
     
     """
     Creates a polynomial approximation P(x1) for a given set, v_data, at x1 using
@@ -150,7 +140,7 @@ class Simulator:
         A callable function representing the polynomial and its coefficients.
     """
     @staticmethod
-    def create_constrained_polynomial(x1_data, v_data, degree):
+    def _create_constrained_polynomial(x1_data: np.ndarray, v_data: np.ndarray, degree: int):
         # Create the Vandermonde matrix A, where A @ c gives the polynomial values
         A = np.vander(x1_data, degree + 1)
         
@@ -169,8 +159,7 @@ class Simulator:
         lower_bound_constraint = LinearConstraint(A_lower, lb=0, ub=np.inf)
         
         # Set the initial coefficients guess for the optimiser to be all zeros
-        c_initial = np.zeros((degree + 1 ))#np.polyfit(x1_data, v_data, degree)
-        print(f"Initial polynomial coefficients: {c_initial}")
+        c_initial = np.zeros((degree + 1 ))
         
         # Perform the constrained optimization
         result = minimize(func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])
@@ -180,4 +169,49 @@ class Simulator:
         
         # Return both the function and its coefficients
         return lambda x1: np.polyval(c_optimal, x1), c_optimal
+    
+    def create_boundary_function(self, boundary_pts: (np.ndarray | Set), lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
+        """
+        Create a polynomial boundary function with a safety margin.
+        
+        Fits a polynomial to boundary points and applies a safety margin based on
+        the Lipschitz constant to ensure feasibility.
+        
+        Args:
+            boundary_pts (np.ndarray | Set): Boundary points. Either a numpy array
+                of x2 values or a set of (x1, x2) tuples. If set, tuples are 
+                automatically sorted and unpacked.
+            lipschitz_const (float): Lipschitz constant for safety margin calculation.
+            x1_pts (np.ndarray, optional): x1 coordinate points. Required if 
+                boundary_pts is a numpy array. Defaults to None.
+            degree (int, optional): Polynomial degree. Defaults to 10.
+        
+        Returns:
+            tuple: A tuple containing:
+                - boundary (callable): Lambda function of the adjusted boundary 
+                polynomial, takes x1 and returns x2 value.
+                - coeffs_adjusted (np.ndarray): Adjusted polynomial coefficients
+                with safety margin applied.
+        """
+        
+        # If boundary_pts is a set
+        if isinstance(boundary_pts, set):
+            # Convert set of (x1, x2) tuples to 2 arrays of x1 and x2 pts
+            x1_pts, boundary_pts = np.array(list(zip(*sorted(boundary_pts))))
+            
+        # If there are no x1_pts then a polynomial can't be created
+        if x1_pts is None:
+            raise ValueError("Simulator.create_boundary_function(): x1_pts required when boundary_pts is ndarray")
+        
+        _, coeffs = self._create_constrained_polynomial(x1_pts, boundary_pts, degree)
+        
+        # Safety margin based on Lipschitz constant
+        safety_diff = lipschitz_const * (x1_pts[1] - x1_pts[0]) / 2
+        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
+        coeffs_adjusted = coeffs.copy()
+        coeffs_adjusted[-1] -= safety_diff
+        # Create the adjusted boundary function with the safety margin
+        boundary = lambda x1: np.polyval(coeffs_adjusted, x1)
+        
+        return boundary, coeffs_adjusted
     
