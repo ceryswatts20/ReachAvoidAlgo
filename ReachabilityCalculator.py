@@ -322,7 +322,7 @@ class ReachabilityCalculator:
         return x[1]
     
     @staticmethod
-    def event_Cu_cross(t, x, C_u):
+    def event_cross_boundary(t, x, boundary: Callable):
         """
         Event function to stop integration when crossing the upper boundary.
         
@@ -331,63 +331,70 @@ class ReachabilityCalculator:
             x (np.ndarray): Current state vector [x1, x2].
             
         Returns:
-            float: Value indicating when to stop (x2 - C_u(x1)).
+            float: Value indicating when to stop (x2 - boundary(x1)).
         """
-        # Stop when x2 - Cu(x1) = 0
+        # Stop when x2 - boundary(x1) = 0
         x1 = float(x[0])
         x2 = float(x[1])
-        return float(x2 - C_u(x1))
+        return float(x2 - boundary(x1))
     
-    @staticmethod
-    def event_Cl_cross(t, x, C_l):
-        """
-        Event function to stop integration when crossing the lower boundary.
+    # @staticmethod
+    # def event_lower_cross(t, x, low):
+    #     """
+    #     Event function to stop integration when crossing the lower boundary.
         
-        Args:
-            t (float): Current time.
-            x (np.ndarray): Current state vector [x1, x2].
+    #     Args:
+    #         t (float): Current time.
+    #         x (np.ndarray): Current state vector [x1, x2].
             
-        Returns:
-            float: Value indicating when to stop (x2 - C_l(x1)).
-        """
-        # Stop when x2 - Cl(x1) = 0
-        x1 = float(x[0])
-        x2 = float(x[1])
-        return float(x2 - C_l(x1))
+    #     Returns:
+    #         float: Value indicating when to stop (x2 - LowerBoundary(x1)).
+    #     """
+    #     # Stop when x2 - LowerBoundary(x1) = 0
+    #     x1 = float(x[0])
+    #     x2 = float(x[1])
+    #     return float(x2 - lower(x1))
     
-    def make_events(self, x1_target: float):
+    def _make_events(self, x1_target: float, upper_boundary: Callable, lower_boundary: Callable):
         """
         Creates and configures ODE stop event functions.
         
         Args:
             x1_target: The x1 value at which to stop integration.
+            upper_boundary (Callable):
+            lower_boundary (Callable): 
         """
         
         # Stop when crossing the x-axis (x2=0)
         cross_x_axis = self.event_x2_zero
         # Stop when crossing x1_target
         cross_x1_target = lambda t, x, xt=x1_target: self.event_x1_cross(t, x, xt)
-        # Stop when crossing the boundary functions C_u and C_l
-        cross_Cu = lambda t, x, Cu=self.C_u: self.event_Cu_cross(t, x, Cu)
-        cross_Cl = lambda t, x, Cl=self.C_l: self.event_Cl_cross(t, x, Cl)
+        # Stop when crossing the boundary functions
+        cross_upper = lambda t, x, upper=upper_boundary: self.event_cross_boundary(t, x, upper)
+        cross_lower = lambda t, x, lower=lower_boundary: self.event_cross_boundary(t, x, lower)
         
         # Set all events to be terminal and to trigger on both directions of crossing
-        for event in [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]:
+        for event in [cross_x_axis, cross_x1_target, cross_upper, cross_lower]:
             event.terminal = True
-            event.direction = 0
+        
+        cross_x1_target.direction = 0
+        # Triggers when crossing from negative to positive
+        cross_upper.direction = 1
+        # Triggers when crossing from positive to negative
+        cross_x_axis.direction = -1
+        cross_lower.direction = -1
 
-        return [cross_x_axis, cross_x1_target, cross_Cu, cross_Cl]
+        return [cross_x_axis, cross_x1_target, cross_upper, cross_lower]
     
-    def integrate(self, x0: np.ndarray, u: int, x1_target: float, direction: str) -> np.ndarray:
+    def integrate(self, x0: np.ndarray, u: int | float | Callable, events: int | float | list[float | Callable], direction: str) -> np.ndarray:
         """
         Integrates the system dynamics from x0 until an event occurs.
 
         Args:
             x0: Initial state [x1, x2].
             u: Control input (0=max decel L, 1=max accel U).
-            x1_target: x1 value at which to stop integration.
+            events: 
             direction: 'forward' or 'backward'.
-            
 
         Returns:
             Array of shape (N, 2) containing the trajectory.
@@ -395,8 +402,15 @@ class ReachabilityCalculator:
         
         # Define the dynamics function for integration based on the control input and direction
         dynamics = lambda t, x: self.boundarySim.get_double_integrator_dynamics(t, x, direction, u)
+        # If events is a float then it is x1_target, default to passing Cu and Cl as boundaries
+        if isinstance(events, float) or isinstance(events, int):
+            x1_target = events
+            upper_boundary = self.C_u
+            lower_boundary = self.C_l
+        else:
+            x1_target, upper_boundary, lower_boundary = events
         # Create event functions for stopping conditions
-        events = self.make_events(x1_target)
+        events = self._make_events(x1_target, upper_boundary, lower_boundary)
         # Large time span to ensure we integrate until an event occurs
         tspan = (0.0, 10.0)
         # Integrate the dynamics using solve_ivp with the defined events
@@ -516,7 +530,7 @@ class ReachabilityCalculator:
                         if debug:
                             print("y not on boundary")
                         # Integrate backwards in time from y with control u
-                        # until crossing a boundary or reaching the interval end
+                        # until crossing a boundary (Cu/Cl) or reaching the interval end
                         T_b = self.integrate(y, u, interval[1], direction='backward')
                         
                         # If no trajectory points found, raise error
@@ -610,7 +624,7 @@ class ReachabilityCalculator:
                             print(f"19: y updated to: {y[0]:.6f}, {y[1]:.6f}")
                     
                     # Integrate backwards in time from y with control u
-                    # until crossing a boundary or reaching the interval end
+                    # until crossing a boundary (Cu/Cl) or reaching the interval end
                     T_b = self.integrate(y, u, interval[1], direction='backward')
                     
                     # If no trajectory points found, raise error

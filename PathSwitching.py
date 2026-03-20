@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ReachAvoidSet import ReachAvoidSet
-import Simulator
 
 def find_x1(qStart, qEnd, p, theta=np.array([0, 0])):
     """Finds the value of x1 for a point p on the path defined by qStart and qEnd, with an optional theta offset.
@@ -163,6 +162,9 @@ if __name__ == "__main__":
         X_Ta = reachAvoidSetA.getTargetSet(1)
         X_Tb = reachAvoidSetB.getTargetSet(1)
         print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
+        # X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
+        # X_T1b = reachAvoidSetB.getTargetSet(switching_points[1]["B"])
+        # print(f"X_T1a: {X_T1a} \nX_T2b: {X_T1b}")
         X_T2a = reachAvoidSetA.getTargetSet(switching_points[2]["A"])
         X_T2b = reachAvoidSetB.getTargetSet(switching_points[2]["B"])
         print(f"X_T2a: {X_T2a} \nX_T2b: {X_T2b}")
@@ -177,7 +179,7 @@ if __name__ == "__main__":
         # Path Segment 1 RAS
         R_A = reachAvoidSetA.compute(X_Ta)
         # reachAvoidSetA.plot(False, False, True, False, False, "$q_A(s)$ Velocity Limit Curves")
-        reachAvoidSetA.plot(True, True, True, True, True, "$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
+        # reachAvoidSetA.plot(True, True, True, True, True, title="$q_A(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
         
         # R_B = reachAvoidSetB.compute(X_Tb)
         # reachAvoidSetB.plot(True, True, True, True, True, "$q_B(x1)$ Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$")
@@ -207,52 +209,54 @@ if __name__ == "__main__":
         # R_4 = reachAvoidSetB.compute(X_T4)
         # reachAvoidSetB.plot(True, True, True, False, True, "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$ for 4th path segment")
         
-        
-        def control_law(x, Zu, Zl):
+        def controller(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
+            """Compute blending factor y(x) ∈ [0, 1].
+
+            y=1 drives the system toward the lower boundary (max accel),
+            y=0 drives it toward the upper boundary (max decel).
+
+            Args:
+                x: Current state [x1, x2].
+                Zu (Callable): Upper boundary function.
+                Zl (Callable): Lower boundary function.
+                tol (float): Tolerance band near each boundary.
+
+            Returns:
+                float: Blending factor y(x) ∈ [0, 1].
+            """
+            
             x1, x2 = x
             # If x2 is approaching the lower boundary
-            if x2 < Zl(x1) + 0.5:
+            if x2 <= Zl(x1) + tol:
                 return 1
             # If x2 is approaching the upper boundary
-            elif x2 > Zu(x1) - 0.5:
+            elif x2 >= Zu(x1) - tol:
                 return 0
             else:
-                return (x2 - Zu(x1))/(Zl(x1) - Zu(x1))
-            
-        def compute_acceleration(t, x, Zu: Callable, Zl: Callable, simulator: Simulator):
-            """Compute control input u(x, y(x)) = L(x) + y(x)(U(x) - L(x))."""
-            
-            # Get acceleration bounds
-            L, U = simulator.get_accel_bounds(x[0], x[1])
-            
-            # Compute blending factor
-            y = control_law(x, Zu, Zl)
-            
-            # Apply control law
-            u = L + y * (U - L)
-            
-            return u
+                y = (x2 - Zu(x1))/(Zl(x1) - Zu(x1))
+                
+            # Clamp to [0, 1] to guarantee boundaries are never crossed
+            return float(np.clip(y, 0.0, 1.0))
             
         # 12. Implement a controller to go from the start of the path switching path to the 1st switching point, p1 -> qA
-        # Starting point
-        x0 = qAs(switching_points[0]["A"])
-        x1_pts = reachAvoidSetA._x1_star
+        # Starting point at rest
+        x0 = [switching_points[0]["A"], 0]
+        print(f"x0: {x0}")
+        # End of path segment 1 i.e switching point 1
+        x1_target = switching_points[1]["A"]
+        print(f"x1_target: {x1_target}")
         lipschitz_A = reachAvoidSetA._lipschitz_const
         # Create boundary functions for the upper and lower boundaries of the reach-avoid set for path A
-        Z_u_func = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_u'], lipschitz_A)
-        Z_l_func = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_l'], lipschitz_A)
+        Z_u_func, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_u'], lipschitz_A)
+        Z_l_func, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_l'], lipschitz_A)
         # Compute control input for the trajectory from start to p1
-        u = lambda t, x: compute_acceleration(t, x, Z_u_func, Z_l_func, reachAvoidSetA.simulator)
+        u = lambda t, x: controller(t, x, Z_u_func, Z_l_func)
+        
+        events = [x1_target, Z_u_func, Z_l_func]
         # Compute the trajectory from start to p1 using the computed control input
-        trajectory = reachAvoidSetA._reach_calc.integrate(x0, u=u, direction="forward", x1_target=switching_points[1]["A"])
-        # Plot
-        plt.figure()
-        plt.xlabel('x1')
-        plt.ylabel('x2')
-        plt.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory from start to p1", color="blue")
-        plt.legend()
-        plt.grid()
-        plt.show()
+        trajectory = reachAvoidSetA.reach_calc.integrate(x0, u=u, direction="forward", events=events)
+        #trajectory = reachAvoidSetA.reach_calc.integrate(x0, u, 1, "forward")
+        reachAvoidSetA.plot(True, True, True, False, False, trajectory=trajectory, title="Trajectory for Path Segment 1")
         
         # # 13. Implement a controller to go from the 1st switching point, p(1), i.e qB(0), to the 2nd switching point, p(2) -> qB
         # bZu, bZl = reachAvoidSetB.get_boundary_functions()

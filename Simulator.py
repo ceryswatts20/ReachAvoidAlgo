@@ -1,4 +1,4 @@
-from typing import Set
+from typing import Callable, Set
 
 import numpy as np
 
@@ -102,7 +102,7 @@ class Simulator:
         return V_u
     
     
-    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int | float) -> np.ndarray:
+    def get_double_integrator_dynamics(self, t, x: np.ndarray, direction, u: int | float | Callable) -> np.ndarray:
         # Matrix A (2x2)
         A = np.array([[0, 1],
                       [0, 0]])
@@ -115,7 +115,9 @@ class Simulator:
         L, U = self.get_accel_bounds(x[0], x[1])
         L = float(L)
         U = float(U)
-        
+        # Evaluate u at current x if callable
+        u = float(u(t, x) if callable(u) else u)
+        print(f"u: {u}")
         # Integrating forwards in time
         if direction == 'forward':
             return A @ x + B * (L + u*(U - L))
@@ -157,8 +159,7 @@ class Simulator:
         lower_bound_constraint = LinearConstraint(A_lower, lb=0, ub=np.inf)
         
         # Set the initial coefficients guess for the optimiser to be all zeros
-        c_initial = np.zeros((degree + 1 ))#np.polyfit(x1_data, v_data, degree)
-        print(f"Initial polynomial coefficients: {c_initial}")
+        c_initial = np.zeros((degree + 1 ))
         
         # Perform the constrained optimization
         result = minimize(func, c_initial, args=(A, v_data), method='SLSQP', constraints=[upper_bound_constraint, lower_bound_constraint])

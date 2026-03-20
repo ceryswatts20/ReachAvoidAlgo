@@ -76,7 +76,7 @@ class ReachAvoidSet:
         self._setup_boundaries()
 
         # Reachability calculator
-        self._reach_calc = ReachabilityCalculator(
+        self.reach_calc = ReachabilityCalculator(
             self._C_u,
             self._C_l,
             self.simulator,
@@ -127,8 +127,8 @@ class ReachAvoidSet:
         x0_l = np.array([X_T[0], x2_min])
 
         # Backward trajectories from top and bottom of target set. Array of (x1, x2) pairs.
-        T_star_u_arr = self._reach_calc.integrate(x0_u, u=0, x1_target=0.0, direction="backward")
-        T_star_l_arr = self._reach_calc.integrate(x0_l, u=1, x1_target=0.0, direction="backward")
+        T_star_u_arr = self.reach_calc.integrate(x0_u, u=0, events=0.0, direction="backward")
+        T_star_l_arr = self.reach_calc.integrate(x0_l, u=1, events=0.0, direction="backward")
         # Store the backward trajectories for later use in plotting
         self._T_star_u_arr = T_star_u_arr
         self._T_star_l_arr = T_star_l_arr
@@ -171,7 +171,7 @@ class ReachAvoidSet:
             plt.show()
 
         # Initialise the reachability calculator
-        reach_calc = self._reach_calc
+        reach_calc = self.reach_calc
         # Generate partition
         _, _, roots = reach_calc.find_S_roots(self._x1_star)
         # Initialise sets Z_u and Z_l
@@ -243,7 +243,7 @@ class ReachAvoidSet:
         
         return [x1, min_x2, max_x2]
 
-    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
+    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, trajectory: np.ndarray | None = None, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
         """
         Plots the reach-avoid set and associated curves.
 
@@ -286,10 +286,10 @@ class ReachAvoidSet:
         if show_intervals:
             x1_star = self._x1_star
             # Find the roots of S(x)
-            lower_roots, upper_roots, roots = self._reach_calc.find_S_roots(x1_star)
+            lower_roots, upper_roots, roots = self.reach_calc.find_S_roots(x1_star)
             # Generate intervals of x1 where S(x) is positive or negative based on the roots
-            I_in_lower, I_out_lower, I_lower = self._reach_calc.generate_partition_I(lower_roots, self._C_l)
-            I_in_upper, I_out_upper, I_upper = self._reach_calc.generate_partition_I(upper_roots, self._C_u)
+            I_in_lower, I_out_lower, I_lower = self.reach_calc.generate_partition_I(lower_roots, self._C_l)
+            I_in_upper, I_out_upper, I_upper = self.reach_calc.generate_partition_I(upper_roots, self._C_u)
             
             if True:
                 print(f"{roots}")
@@ -399,6 +399,9 @@ class ReachAvoidSet:
             #     alpha=0.75,
             #     label="$\\mathcal{R}(\\mathcal{X}_T)$",
             # )
+        
+        if trajectory is not None:
+            ax.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory from start to p1", color="blue")
 
         # Set the legend and show the plot
         ax.legend()
