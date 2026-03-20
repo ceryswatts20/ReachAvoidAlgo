@@ -338,23 +338,6 @@ class ReachabilityCalculator:
         x2 = float(x[1])
         return float(x2 - boundary(x1))
     
-    # @staticmethod
-    # def event_lower_cross(t, x, low):
-    #     """
-    #     Event function to stop integration when crossing the lower boundary.
-        
-    #     Args:
-    #         t (float): Current time.
-    #         x (np.ndarray): Current state vector [x1, x2].
-            
-    #     Returns:
-    #         float: Value indicating when to stop (x2 - LowerBoundary(x1)).
-    #     """
-    #     # Stop when x2 - LowerBoundary(x1) = 0
-    #     x1 = float(x[0])
-    #     x2 = float(x[1])
-    #     return float(x2 - lower(x1))
-    
     def _make_events(self, x1_target: float, upper_boundary: Callable, lower_boundary: Callable):
         """
         Creates and configures ODE stop event functions.

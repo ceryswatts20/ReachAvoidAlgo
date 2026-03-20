@@ -117,7 +117,7 @@ class Simulator:
         U = float(U)
         # Evaluate u at current x if callable
         u = float(u(t, x) if callable(u) else u)
-        print(f"u: {u}")
+        
         # Integrating forwards in time
         if direction == 'forward':
             return A @ x + B * (L + u*(U - L))
