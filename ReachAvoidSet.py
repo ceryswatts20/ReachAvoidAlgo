@@ -1,3 +1,5 @@
+from typing import Dict
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -65,7 +67,7 @@ class ReachAvoidSet:
         if not lipschitz[0]:
             raise ValueError("Path is not Lipschitz continuous.")
         # Store the Lipschitz constant for later use in boundary adjustments
-        self._lipschitz_const = lipschitz[1]
+        self.lipschitz_const = lipschitz[1]
 
         # Robot Dynamics and Simulator
         self._robot_dynamics = ManipulatorDynamics(self._m, self._L, self._q_start, self._q_end, self._robot_type)
@@ -98,7 +100,7 @@ class ReachAvoidSet:
         # Set lower boundary set to zero
         V_l = np.zeros_like(V_u)
         # Fit polynomial to upper boundary set to get C_u(x1) with a safety margin based on the Lipschitz constant
-        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(V_u, self._lipschitz_const, x1_star)
+        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(V_u, self.lipschitz_const, x1_star)
         
         self._C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
         self._C_l_coeffs = np.zeros(poly_degree + 1)
@@ -106,7 +108,7 @@ class ReachAvoidSet:
         self._V_l = V_l
         
         if self._debug:
-            print(f"Lipschitz constant: {self._lipschitz_const:.4f}")
+            print(f"Lipschitz constant: {self.lipschitz_const:.4f}")
 
     def compute(self, X_T: list) -> set:
         """
@@ -188,14 +190,14 @@ class ReachAvoidSet:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, x_d, x_a, 1, debug=self._debug))
+            Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, x_d, x_a, u=1, debug=self._debug))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, x_d, x_a, 0, debug=self._debug))
+            Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, x_d, x_a, u=0, debug=self._debug))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -206,7 +208,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is on the lower boundary.")
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, [0, 0], x_a, 1, debug=self._debug))
+                Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, [0, 0], x_a, u=1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -217,7 +219,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, [0, 0], x_d, 0, debug=self._debug))
+                Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, [0, 0], x_d, u=0, debug=self._debug))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")
@@ -243,7 +245,7 @@ class ReachAvoidSet:
         
         return [x1, min_x2, max_x2]
 
-    def plot(self, show_targetset: bool, show_reach_avoid: bool, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, trajectory: np.ndarray | None = None, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$"):
+    def plot(self, show_boundaries: bool, show_intervals: bool, show_trajectories: bool, X_T: list | None = None, ras : Dict[str, tuple] | None = None, trajectory: np.ndarray | None = None, title: str = "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T)$", ax: plt.Axes | None = None):
         """
         Plots the reach-avoid set and associated curves.
 
@@ -257,14 +259,18 @@ class ReachAvoidSet:
             RuntimeError: If compute() has not been called yet.
         """
         
-        if show_reach_avoid and (self._Z_l is None or self._Z_u is None):
-            raise RuntimeError("To plot the reach-avoid set and/or the target set, call compute() before plot().")
+        # Create a new figure if no ax is provided
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            standalone = True
+        else:
+            standalone = False
+        
+        # if show_reach_avoid and (self._Z_l is None or self._Z_u is None):
+        #     raise RuntimeError("To plot the reach-avoid set and/or the target set, call compute() before plot().")
 
-        X_T = self._X_T
         x1_fine = np.linspace(0, 1, 5000)
 
-        # Create the plot and set the labels and title
-        fig, ax = plt.subplots(figsize=(10, 5))
         ax.set_xlabel("$x_1$")
         ax.set_ylabel("$x_2$")
         ax.set_title(title)
@@ -288,8 +294,8 @@ class ReachAvoidSet:
             # Find the roots of S(x)
             lower_roots, upper_roots, roots = self.reach_calc.find_S_roots(x1_star)
             # Generate intervals of x1 where S(x) is positive or negative based on the roots
-            I_in_lower, I_out_lower, I_lower = self.reach_calc.generate_partition_I(lower_roots, self._C_l)
-            I_in_upper, I_out_upper, I_upper = self.reach_calc.generate_partition_I(upper_roots, self._C_u)
+            I_in_lower, I_out_lower, _ = self.reach_calc.generate_partition_I(lower_roots, self._C_l)
+            I_in_upper, I_out_upper, _ = self.reach_calc.generate_partition_I(upper_roots, self._C_u)
             
             if True:
                 print(f"{roots}")
@@ -360,53 +366,39 @@ class ReachAvoidSet:
                     label="$S(x)>0$" if i == 0 else "",
                 )
         
-        if show_targetset:
+        if X_T is not None:
             # Target set
             ax.vlines(X_T[0], X_T[1], X_T[2], colors="orange", label="$\\mathcal{X}_T$")
             ax.plot(X_T[0], X_T[2], "ko")
             ax.plot(X_T[0], X_T[1], "ko")
         
-        if show_reach_avoid:
-            # Z boundaries
-            Z_u_arr = np.array(sorted(self._Z_u))
-            Z_l_arr = np.array(sorted(self._Z_l))
-            # Extract x and y coordinates
-            x1_Z_u = Z_u_arr[:, 0]
-            x2_Z_u = Z_u_arr[:, 1]
-            x1_Z_l = Z_l_arr[:, 0]
-            x2_Z_l = Z_l_arr[:, 1]
+        if ras is not None:
+            Z_u = ras['Z_u']
+            Z_l = ras['Z_l']
+            # Z boundaries as functions, to allow shading
+            z_u, _ = self.simulator.create_boundary_function(Z_u, self.lipschitz_const)
+            z_l, _ = self.simulator.create_boundary_function(Z_l, self.lipschitz_const)
             
-            ax.plot(x1_Z_u, x2_Z_u, "m--", label="$Z_u$")
-            ax.plot(x1_Z_l, x2_Z_l, "g--", label="$Z_l$")
-
-            # Shaded reach-avoid set
-            x_vals = np.unique(np.concatenate((x1_Z_u, x1_Z_l)))
-            # Filter x_vals to be within 0 and the target set
-            x_vals_filtered = x_vals[(x_vals >= 0) & (x_vals <= X_T[0])]
-            # Create interpolation functions for the upper and lower boundaries to fill between them. Needed for ax.fill_between which requires functions or arrays defined on the same x values.
-            f_u = interp1d(x1_Z_u, x2_Z_u, kind="linear", fill_value="extrapolate")
-            f_l = interp1d(x1_Z_l, x2_Z_l, kind="linear", fill_value="extrapolate")
-            
-            # Plot the interpolated upper and lower boundaries of the reach-avoid set
-            # ax.plot(x_vals_filtered, f_u(x_vals_filtered), "b--", label="$Z_u$ (interpolated)")
-            # ax.plot(x_vals_filtered, f_l(x_vals_filtered), "r--", label="$Z_l$ (interpolated)")
-            # # Fill between the upper and lower boundaries to show the reach-avoid set
-            # ax.fill_between(
-            #     x_vals_filtered,
-            #     f_l(x_vals_filtered),
-            #     f_u(x_vals_filtered),
-            #     color="gray",
-            #     alpha=0.75,
-            #     label="$\\mathcal{R}(\\mathcal{X}_T)$",
-            # )
+            # Fill between the upper and lower boundaries to show the reach-avoid set
+            mask = (x1_fine >= 0) & (x1_fine <= X_T[0])
+            ax.fill_between(
+                x1_fine,
+                z_l(x1_fine),
+                z_u(x1_fine),
+                where=mask,
+                color="gray",
+                alpha=0.75,
+                label="$\\mathcal{R}(\\mathcal{X}_T)$",
+            )
         
         if trajectory is not None:
-            ax.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory from start to p1", color="blue")
+            ax.plot(trajectory[:, 0], trajectory[:, 1], label="Trajectory", color="blue")
 
         # Set the legend and show the plot
         ax.legend()
-        plt.tight_layout()
-        plt.show()
+        if standalone:
+            plt.tight_layout()
+            plt.show()
         
     
 

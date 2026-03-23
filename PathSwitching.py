@@ -1,5 +1,6 @@
 from typing import Callable
 
+from matplotlib import axes
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -15,18 +16,18 @@ def findX1(qStart, qEnd, p, theta=np.array([0, 0])):
 def pathsIntersect(qA: Callable, qB: Callable, point: np.ndarray=None):
     """Checks if two paths defined by qA and qB intersect in the joint space, assuming they can be translated along q1 and qB = -qA."""
     
-    # Get the minimum x2 value from the largest minimum x2 value of each path
-    min_x2 = max(min(qA(0)[1], qA(1)[1]), min(qB(0)[1], qB(1)[1]))
-    # Get the maximum x2 value from the smallest maximum x2 value of each path
-    max_x2 = min(max(qA(0)[1], qA(1)[1]), max(qB(0)[1], qB(1)[1]))
+    # Get the minimum q2 value from the largest minimum q2 value of each path
+    min_q2 = max(min(qA(0)[1], qA(1)[1]), min(qB(0)[1], qB(1)[1]))
+    # Get the maximum q2 value from the smallest maximum q2 value of each path
+    max_q2 = min(max(qA(0)[1], qA(1)[1]), max(qB(0)[1], qB(1)[1]))
     
-    # If a point is provided, check if the point's x2 value is within the range of the paths' x2 values
+    # If a point is provided, check if the point's q2 value is within the range of the paths' q2 values
     if point is not None:
-        point_x2 = point[1]
-        return min_x2 <= point_x2 <= max_x2
+        point_q2 = point[1]
+        return min_q2 <= point_q2 <= max_q2
     
-    # If the minimum x2 value is less than the maximum x2 value, then the paths intersect 
-    return min_x2 < max_x2
+    # If the minimum q2 value is less than or equal to the maximum q2 value, then the paths intersect 
+    return min_q2 <= max_q2
 
 def getTargetSetIntersection(x1: float | int, XTa: list[float], XTb: list[float]) -> list[float]:
     """
@@ -66,38 +67,38 @@ def validSwichedPath(qStart: np.ndarray, qEnd: np.ndarray, qA: Callable, qB: Cal
     
     # Check if the paths intersect
     if pathsIntersect(qA, qB):
-        # Get the minimum x2 value for each given paths
-        min_x2A = min(qA(0)[1], qA(1)[1])
-        min_x2B = min(qB(0)[1], qB(1)[1])
-        max_x2A = max(qA(0)[1], qA(1)[1])
-        max_x2B = max(qB(0)[1], qB(1)[1])
+        # Get the minimum q2 value for each given paths
+        min_q2A = min(qA(0)[1], qA(1)[1])
+        min_q2B = min(qB(0)[1], qB(1)[1])
+        max_q2A = max(qA(0)[1], qA(1)[1])
+        max_q2B = max(qB(0)[1], qB(1)[1])
         
-        # Get the minimum x2 value of all paths
-        min_x2 = min(min_x2A, min_x2B)
-        # Get the maximum x2 value of all paths
-        max_x2 = max(max_x2A, max_x2B)
+        # Get the minimum q2 value of all paths
+        min_q2 = min(min_q2A, min_q2B)
+        # Get the maximum q2 value of all paths
+        max_q2 = max(max_q2A, max_q2B)
         
-        # If qA and qB start and end at the same x2
-        if min_x2A == min_x2B and max_x2A == max_x2B:
+        # If qA and qB start and end at the same q2
+        if min_q2A == min_q2B and max_q2A == max_q2B:
             # Check if qStart and qEnd are within that range
             return pathsIntersect(qA, qB, qStart) and pathsIntersect(qA, qB, qEnd) 
-        # If qStart and qEnd are within the minimum and maximum x2 of the given path
-        elif min_x2 <= qStart <= max_x2 and min_x2 <= qEnd <= max_x2:
+        # If qStart and qEnd are within the minimum and maximum q2 of the given path
+        elif min_q2 <= qStart <= max_q2 and min_q2 <= qEnd <= max_q2:
             # For each point
             for pt, value in {'qStart': qStart, 'qEnd': qEnd}:
                 # Check if pt is within the area only accessible by qA
-                if min_x2A <= pt < min_x2B or max_x2B < pt <= max_x2A:
+                if min_q2A <= pt < min_q2B or max_q2B < pt <= max_q2A:
                     print(f"{value} is on qA")
                 # Check if pt is within the area only accessible by qA
-                elif min_x2B <= pt < min_x2A or max_x2A < pt <= max_x2B:
+                elif min_q2B <= pt < min_q2A or max_q2A < pt <= max_q2B:
                     print(f"{value} is on qB")
                 else:
-                    print(f"validSwichedPath error: max_x2A: {max_x2A}, min_x2B: {max_x2B}")
+                    print(f"validSwichedPath error: max_q2A: {max_q2A}, min_q2B: {max_q2B}")
                 
             return True
         else:
             print("qStart and/or qEnd not within range of given paths:")
-            print(f"\t min_x2: {min_x2}, \t max_x2: {max_x2}")
+            print(f"\t min_q2: {min_q2}, \t max_q2: {max_q2}")
             print(f"\t qStart: {qStart}, \t qEnd: {qEnd}")
             return False
     else:
@@ -203,119 +204,131 @@ if __name__ == "__main__":
                 if pathsIntersect(qAs, qBs, point_on_B):
                     print(f"Paths qA and qB intersect at {sp['point']} on path B.")
                     
-        
+        # Define path segments
+        # P1: start -> p1 on A
+        P1 = [switching_points[0]["A"], switching_points[1]["A"], "A"]
+        # P2: p1 -> p2 on B
+        P2 = [switching_points[1]["B"], switching_points[2]["B"], "B"]
+        # P3: p2 -> p3 on A
+        P3 = [switching_points[2]["A"], switching_points[3]["A"], "A"]
+        # P4: p3 -> end on B
+        P4 = [switching_points[3]["B"], switching_points[4]["B"], "B"]
+        # Switched path - tuple of lists
+        switched_path = [P1, P2, P3, P4]
+        print(f"switched path: {switched_path}")
+
         # Calculate the reach-avoid set for given paths - used to create path segment target sets
         reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
         reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
-        reachAvoidSet1 = ReachAvoidSet("parameters.txt", qA_start, qA_end)
-        reachAvoidSet2 = ReachAvoidSet("parameters.txt", qB_start, qB_end)
-        reachAvoidSet3 = ReachAvoidSet("parameters.txt", qA_start, qA_end)
-        reachAvoidSet4 = ReachAvoidSet("parameters.txt", qB_start, qB_end)
         
         # Create target sets
-        X_Ta = reachAvoidSetA.getTargetSet(1)
-        X_Tb = reachAvoidSetB.getTargetSet(1)
-        print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
+        # X_Ta = reachAvoidSetA.getTargetSet(1)
+        # X_Tb = reachAvoidSetB.getTargetSet(1)
+        # print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
+        X_T = []
+        # Loop through the switching points excluding START and END
+        # range(1, len(switching_points)-1) -> 1 to len(switching_points)-2
+        for i in range(1, len(switching_points) - 1):
+            X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"])
+            X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"])
+            X_T.append(getTargetSetIntersection(switching_points[i]["A"], X_Ta, X_Tb))
+        print(f"X_T = {X_T}")
         
-        X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
-        X_T1b = reachAvoidSetB.getTargetSet(switching_points[1]["B"])
-        print(f"X_T1a: {X_T1a} \nX_T1b: {X_T1b}")
-        X_T1 = getTargetSetIntersection(switching_points[1]["A"], X_T1a, X_T1b)
-        print(f"Intersecting Target Set, X_T1: {X_T1}")
+        # X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
+        # X_T1b = reachAvoidSetB.getTargetSet(switching_points[1]["B"])
+        # print(f"X_T1a: {X_T1a} \nX_T1b: {X_T1b}")
+        # X_T1 = getTargetSetIntersection(switching_points[1]["A"], X_T1a, X_T1b)
+        # print(f"Intersecting Target Set, X_T1: {X_T1}")
         
-        X_T2a = reachAvoidSetA.getTargetSet(switching_points[2]["A"])
-        X_T2b = reachAvoidSetB.getTargetSet(switching_points[2]["B"])
-        print(f"X_T2a: {X_T2a} \nX_T2b: {X_T2b}")
-        X_T2 = getTargetSetIntersection(switching_points[2]["B"], X_T2a, X_T2b)
-        print(f"Intersecting Target Set, X_T2: {X_T2}")
+        # X_T2a = reachAvoidSetA.getTargetSet(switching_points[2]["A"])
+        # X_T2b = reachAvoidSetB.getTargetSet(switching_points[2]["B"])
+        # print(f"X_T2a: {X_T2a} \nX_T2b: {X_T2b}")
+        # X_T2 = getTargetSetIntersection(switching_points[2]["B"], X_T2a, X_T2b)
+        # print(f"Intersecting Target Set, X_T2: {X_T2}")
         
-        X_T3a = reachAvoidSetA.getTargetSet(switching_points[3]["A"])
-        X_T3b = reachAvoidSetB.getTargetSet(switching_points[3]["B"])
-        print(f"X_T3a: {X_T3a} \nX_T3b: {X_T3b}")
-        X_T3 = getTargetSetIntersection(switching_points[3]["A"], X_T3a, X_T3b)
-        print(f"Intersecting Target Set, X_T3: {X_T3}")
+        # X_T3a = reachAvoidSetA.getTargetSet(switching_points[3]["A"])
+        # X_T3b = reachAvoidSetB.getTargetSet(switching_points[3]["B"])
+        # print(f"X_T3a: {X_T3a} \nX_T3b: {X_T3b}")
+        # X_T3 = getTargetSetIntersection(switching_points[3]["A"], X_T3a, X_T3b)
+        # print(f"Intersecting Target Set, X_T3: {X_T3}")
         
         X_T4 = reachAvoidSetB.getTargetSet(switching_points[4]["B"])
         print(f"X_T4: {X_T4}")
-
+        exit()
         
         # Path Segment 1 RAS
-        R_P1 = reachAvoidSet1.compute(X_T1)
+        R_P1 = reachAvoidSetA.compute(X_T1)
         # Path Segment 2 RAS
-        R_P2 = reachAvoidSet2.compute(X_T2)
+        R_P2 = reachAvoidSetB.compute(X_T2)
         # Path Segment 3 RAS
-        R_P2 = reachAvoidSet3.compute(X_T3)
+        R_P3 = reachAvoidSetA.compute(X_T3)
         # Path Segment 4 RAS
-        R_P2 = reachAvoidSet4.compute(X_T4)
+        R_P4 = reachAvoidSetB.compute(X_T4)
         
         # Path segments starting points, at rest
-        # P1: start -> p1 on A
-        x0_1 = [switching_points[0]["A"], 0]
-        xEnd_1 = switching_points[1]["A"]
+        x0_1 = [switched_path[0][0], 0]
+        xEnd_1 = switched_path[0][1]
         print(f"x0_1: {x0_1} \txEnd_1: {xEnd_1}")
-        # P2: p1 -> p2 on B
-        x0_2 = [switching_points[1]["B"], 0]
-        xEnd_2 = switching_points[2]["B"]
+        x0_2 = [switched_path[1][0], 0]
+        xEnd_2 = switched_path[1][1]
         print(f"x0_2: {x0_2} \txEnd_2: {xEnd_2}")
-        # P3: p2 -> p3 on A
-        x0_3 = [switching_points[2]["A"], 0]
-        xEnd_3 = switching_points[3]["A"]
+        x0_3 = [switched_path[2][0], 0]
+        xEnd_3 = switched_path[2][1]
         print(f"x0_3: {x0_3} \txEnd_3: {xEnd_3}")
-        # P4: p3 -> end on B
-        x0_4 = [switching_points[3]["B"], 0]
-        xEnd_4 = switching_points[4]["B"]
+        x0_4 = [switched_path[3][0], 0]
+        xEnd_4 = switched_path[3][1]
         print(f"x0_4: {x0_4} \txEnd_4: {xEnd_4}")
         
-        lipschitz_1 = reachAvoidSet1._lipschitz_const
-        lipschitz_2 = reachAvoidSet2._lipschitz_const
-        lipschitz_3 = reachAvoidSet3._lipschitz_const
-        lipschitz_4 = reachAvoidSet4._lipschitz_const
+        lipschitz_A = reachAvoidSetA.lipschitz_const
+        lipschitz_B = reachAvoidSetB.lipschitz_const
         
-        # 12. Implement a controller to go from the start of the path switching path to the 1st switching point, p1 -> qA
+        # Implement a controller to go from the start of the path segment to the end
         # Create boundary functions for reach-avoid set for path segment 1
-        Z_u_func, _ = reachAvoidSet1.simulator.create_boundary_function(R_P1['Z_u'], lipschitz_1)
-        Z_l_func, _ = reachAvoidSet1.simulator.create_boundary_function(R_P1['Z_l'], lipschitz_1)
-        # Compute control input for the trajectory from start to p1
-        u = lambda t, x: controller(t, x, Z_u_func, Z_l_func)
+        z_u_1, _ = reachAvoidSetA.simulator.create_boundary_function(R_P1['Z_u'], lipschitz_A)
+        z_l_1, _ = reachAvoidSetA.simulator.create_boundary_function(R_P1['Z_l'], lipschitz_A)
+        # Compute control input for the trajectory
+        u = lambda t, x: controller(t, x, z_u_1, z_l_1)
+        events = [xEnd_1, z_u_1, z_l_1]
+        # Compute the trajectory using the computed control input
+        trajectory1 = reachAvoidSetA.reach_calc.integrate(x0_1, u=u, direction="forward", events=events)
         
-        events = [xEnd_1, Z_u_func, Z_l_func]
-        # Compute the trajectory from start to p1 using the computed control input
-        trajectory = reachAvoidSet1.reach_calc.integrate(x0_1, u=u, direction="forward", events=events)
-        reachAvoidSet1.plot(True, True, True, False, False, trajectory=trajectory, title="Trajectory for Path Segment 1")
+        # Create boundary functions for reach-avoid set for path segment 2
+        z_u_2, _ = reachAvoidSetB.simulator.create_boundary_function(R_P2['Z_u'], lipschitz_B)
+        z_l_2, _ = reachAvoidSetB.simulator.create_boundary_function(R_P2['Z_l'], lipschitz_B)
+        # Compute control input for the trajectory
+        u = lambda t, x: controller(t, x, z_u_2, z_l_2)
+        events = [xEnd_2, z_u_2, z_l_2]
+        # Compute the trajectory using the computed control input
+        trajectory2 = reachAvoidSetB.reach_calc.integrate(x0_2, u=u, direction="forward", events=events)
         
-        # # 13. Implement a controller to go from the 1st switching point, p(1), i.e qB(0), to the 2nd switching point, p(2) -> qB
-        # Create boundary functions for reach-avoid set for path segment 1
-        Z_u_func, _ = reachAvoidSet2.simulator.create_boundary_function(R_P2['Z_u'], lipschitz_2)
-        Z_l_func, _ = reachAvoidSet2.simulator.create_boundary_function(R_P2['Z_l'], lipschitz_2)
-        # Compute control input for the trajectory from start to p1
-        u = lambda t, x: controller(t, x, Z_u_func, Z_l_func)
+        # Create boundary functions for reach-avoid set for path segment 3
+        z_u_3, _ = reachAvoidSetA.simulator.create_boundary_function(R_P3['Z_u'], lipschitz_A)
+        z_l_3, _ = reachAvoidSetA.simulator.create_boundary_function(R_P3['Z_l'], lipschitz_A)
+        # Compute control input for the trajectory
+        u = lambda t, x: controller(t, x, z_u_3, z_l_3)
+        events = [xEnd_3, z_u_3, z_l_3]
+        # Compute the trajectory using the computed control input
+        trajectory3 = reachAvoidSetA.reach_calc.integrate(x0_3, u=u, direction="forward", events=events)
         
-        events = [xEnd_2, Z_u_func, Z_l_func]
-        # Compute the trajectory from start to p1 using the computed control input
-        trajectory = reachAvoidSet2.reach_calc.integrate(x0_2, u=u, direction="forward", events=events)
-        reachAvoidSet2.plot(True, True, True, False, False, trajectory=trajectory, title="Trajectory for Path Segment 2")
+        # Create boundary functions for reach-avoid set for path segment 4
+        z_u_4, _ = reachAvoidSetB.simulator.create_boundary_function(R_P4['Z_u'], lipschitz_B)
+        z_l_4, _ = reachAvoidSetB.simulator.create_boundary_function(R_P4['Z_l'], lipschitz_B)
+        # Compute control input for the trajectory
+        u = lambda t, x: controller(t, x, z_u_4, z_l_4)
+        events = [xEnd_4, z_u_4, z_l_4]
+        # Compute the trajectory using the computed control input
+        trajectory4 = reachAvoidSetB.reach_calc.integrate(x0_4, u=u, direction="forward", events=events)
         
-        # 14. Implement a controller to go from the 2nd switching point, p(2), to the 3rd switching point, p(3) -> qA
-        Z_u_func, _ = reachAvoidSet3.simulator.create_boundary_function(R_P2['Z_u'], lipschitz_3)
-        Z_l_func, _ = reachAvoidSet3.simulator.create_boundary_function(R_P2['Z_l'], lipschitz_3)
-        # Compute control input for the trajectory from start to p1
-        u = lambda t, x: controller(t, x, Z_u_func, Z_l_func)
+        # Plot all path-switching trajectories on 1 figure.
+        fig, axes = plt.subplots(2, 2)
+        # Path segment 1
+        reachAvoidSetA.plot(True, False, False, X_T1, R_P1, trajectory1, "Trajectory for Path Segment 1", axes[0, 0])
+        reachAvoidSetB.plot(True, False, False, X_T2, R_P2, trajectory2, "Trajectory for Path Segment 2", axes[0, 1])
+        reachAvoidSetA.plot(True, False, False, X_T3, R_P3, trajectory3, "Trajectory for Path Segment 3", axes[1, 0])
+        reachAvoidSetB.plot(True, False, False, X_T4, R_P4, trajectory4, "Trajectory for Path Segment 4", axes[1, 1])
         
-        events = [xEnd_3, Z_u_func, Z_l_func]
-        # Compute the trajectory from start to p1 using the computed control input
-        trajectory = reachAvoidSet3.reach_calc.integrate(x0_3, u=u, direction="forward", events=events)
-        reachAvoidSet3.plot(True, True, True, False, False, trajectory=trajectory, title="Trajectory for Path Segment 3")
-        
-        # 15. Implement a controller to go from the 3rd switching point, p(3), to the end of the path switching path -> qB
-        Z_u_func, _ = reachAvoidSet4.simulator.create_boundary_function(R_P2['Z_u'], lipschitz_4)
-        Z_l_func, _ = reachAvoidSet4.simulator.create_boundary_function(R_P2['Z_l'], lipschitz_4)
-        # Compute control input for the trajectory from start to p1
-        u = lambda t, x: controller(t, x, Z_u_func, Z_l_func)
-        
-        events = [xEnd_4, Z_u_func, Z_l_func]
-        # Compute the trajectory from start to p1 using the computed control input
-        trajectory = reachAvoidSet4.reach_calc.integrate(x0_4, u=u, direction="forward", events=events)
-        reachAvoidSet4.plot(True, True, True, False, False, trajectory=trajectory, title="Trajectory for Path Segment 4")
+        plt.tight_layout()
+        plt.show()
     
     except (FileNotFoundError, ValueError) as e:
         print(f"Exiting due to parameter loading or processing error: {e}")
