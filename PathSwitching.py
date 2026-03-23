@@ -232,7 +232,6 @@ if __name__ == "__main__":
             X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"])
             X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"])
             X_T.append(getTargetSetIntersection(switching_points[i]["A"], X_Ta, X_Tb))
-        print(f"X_T = {X_T}")
         
         # X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
         # X_T1b = reachAvoidSetB.getTargetSet(switching_points[1]["B"])
@@ -252,18 +251,17 @@ if __name__ == "__main__":
         # X_T3 = getTargetSetIntersection(switching_points[3]["A"], X_T3a, X_T3b)
         # print(f"Intersecting Target Set, X_T3: {X_T3}")
         
-        X_T4 = reachAvoidSetB.getTargetSet(switching_points[4]["B"])
-        print(f"X_T4: {X_T4}")
-        exit()
+        X_T.append(reachAvoidSetB.getTargetSet(switching_points[4]["B"]))
+        print(f"X_T = {X_T}")
         
         # Path Segment 1 RAS
-        R_P1 = reachAvoidSetA.compute(X_T1)
+        R_P1 = reachAvoidSetA.compute(X_T[0])
         # Path Segment 2 RAS
-        R_P2 = reachAvoidSetB.compute(X_T2)
+        R_P2 = reachAvoidSetB.compute(X_T[1])
         # Path Segment 3 RAS
-        R_P3 = reachAvoidSetA.compute(X_T3)
+        R_P3 = reachAvoidSetA.compute(X_T[2])
         # Path Segment 4 RAS
-        R_P4 = reachAvoidSetB.compute(X_T4)
+        R_P4 = reachAvoidSetB.compute(X_T[3])
         
         # Path segments starting points, at rest
         x0_1 = [switched_path[0][0], 0]
@@ -322,10 +320,10 @@ if __name__ == "__main__":
         # Plot all path-switching trajectories on 1 figure.
         fig, axes = plt.subplots(2, 2)
         # Path segment 1
-        reachAvoidSetA.plot(True, False, False, X_T1, R_P1, trajectory1, "Trajectory for Path Segment 1", axes[0, 0])
-        reachAvoidSetB.plot(True, False, False, X_T2, R_P2, trajectory2, "Trajectory for Path Segment 2", axes[0, 1])
-        reachAvoidSetA.plot(True, False, False, X_T3, R_P3, trajectory3, "Trajectory for Path Segment 3", axes[1, 0])
-        reachAvoidSetB.plot(True, False, False, X_T4, R_P4, trajectory4, "Trajectory for Path Segment 4", axes[1, 1])
+        reachAvoidSetA.plot(True, False, False, X_T[0], R_P1, trajectory1, "Trajectory for Path Segment 1", axes[0, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[1], R_P2, trajectory2, "Trajectory for Path Segment 2", axes[0, 1])
+        reachAvoidSetA.plot(True, False, False, X_T[2], R_P3, trajectory3, "Trajectory for Path Segment 3", axes[1, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[3], R_P4, trajectory4, "Trajectory for Path Segment 4", axes[1, 1])
         
         plt.tight_layout()
         plt.show()
