@@ -29,30 +29,6 @@ def pathsIntersect(qA: Callable, qB: Callable, point: np.ndarray=None):
     # If the minimum q2 value is less than or equal to the maximum q2 value, then the paths intersect 
     return min_q2 <= max_q2
 
-def getTargetSetIntersection(x1: float | int, XTa: list[float], XTb: list[float]) -> list[float]:
-    """
-    Creates a new target set from the intersection of 2 given target sets.
-    
-    Args:
-        x1 (float | int): 
-        XTa (list[float]): 1st target set.
-        XTb (list[float]): 2nd target set.
-
-    Returns:
-        list[float]: New target set of [x1, minx2, maxx2].
-    """
-    
-    # Find the maximum minx2 value of the given target sets
-    minx2 = max(XTa[1], XTb[1])
-    # Find the minimum maxx2 value of the given target sets
-    maxx2 = min(XTa[2], XTb[2])
-    
-    # If there is no intersection
-    if minx2 > maxx2:
-        raise ValueError("getTargetSetIntersection: Target sets don't intersect.")
-    
-    return [x1, minx2, maxx2]
-
 
 def validSwichedPath(qStart: np.ndarray, qEnd: np.ndarray, qA: Callable, qB: Callable):
     """Checks if a switch path start and end points are reachable from the given paths.
@@ -105,6 +81,55 @@ def validSwichedPath(qStart: np.ndarray, qEnd: np.ndarray, qA: Callable, qB: Cal
         print("Paths don't intersect.")
         return False
     
+def getTargetSetIntersection(x1: float | int, XTa: list[float], XTb: list[float]) -> list[float]:
+    """
+    Creates a new target set from the intersection of 2 given target sets.
+    
+    Args:
+        x1 (float | int): 
+        XTa (list[float]): 1st target set.
+        XTb (list[float]): 2nd target set.
+
+    Returns:
+        list[float]: New target set of [x1, minx2, maxx2].
+    """
+    
+    # Find the maximum minx2 value of the given target sets
+    minx2 = max(XTa[1], XTb[1])
+    # Find the minimum maxx2 value of the given target sets
+    maxx2 = min(XTa[2], XTb[2])
+    
+    # If there is no intersection
+    if minx2 > maxx2:
+        raise ValueError("getTargetSetIntersection: Target sets don't intersect.")
+    
+    return [x1, minx2, maxx2]
+
+def arePathsParallel(qA: Callable, qB: Callable) -> bool:
+    
+    qA_start = qA(0)
+    qA_end = qA(1)
+    qB_start = qB(0)
+    qB_end = qB(1)
+    direction_A = qA_end - qA_start
+    direction_B = qB_end - qB_start
+    
+    # Normalize directions
+    dir_A_norm = direction_A / np.linalg.norm(direction_A)
+    dir_B_norm = direction_B / np.linalg.norm(direction_B)
+
+    # Check if parallel (dot product ≈ ±1)
+    dot_product = np.dot(dir_A_norm, dir_B_norm)
+    tolerance = 1e-6
+
+    if np.abs(np.abs(dot_product) - 1) < tolerance:
+        print("Paths are parallel")
+        return True
+    else:
+        print("Paths are not parallel")
+        return False
+    
+    
 def controller(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
     """Compute blending factor y(x) ∈ [0, 1].
 
@@ -144,6 +169,11 @@ if __name__ == "__main__":
         qB_end = np.array([216, 0])
         # qB(s) = -qA(s) + theta (216 degrees)
         qBs = lambda s: qB_start + s * (qB_end - qB_start)
+        # Dummy path used to test parallel paths method
+        qCs = lambda s : qA_start + s * (qA_end/2 - qA_start)
+        
+        arePathsParallel(qAs, qBs)
+        arePathsParallel(qAs, qCs)
         
         # Swithing path points in joint space
         start = np.array([27, 27])
@@ -220,17 +250,33 @@ if __name__ == "__main__":
         # Calculate the reach-avoid set for given paths - used to create path segment target sets
         reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
         reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
-        
+        lipschitz_A = reachAvoidSetA.lipschitz_const
+        lipschitz_B = reachAvoidSetB.lipschitz_const
         # Create target sets
-        # X_Ta = reachAvoidSetA.getTargetSet(1)
-        # X_Tb = reachAvoidSetB.getTargetSet(1)
-        # print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
+        X_Ta = reachAvoidSetA.getTargetSet(1)
+        X_Tb = reachAvoidSetB.getTargetSet(1)
+        print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
+        # Compute the reach avoid set
+        R_A = reachAvoidSetA.compute(X_Ta)
+        R_B = reachAvoidSetB.compute(X_Tb)
+        # Create boundary functions for reach-avoid set A
+        z_u_A, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_u'], lipschitz_A)
+        z_l_A, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_l'], lipschitz_A)
+        # Create boundary functions for reach-avoid set B
+        z_u_B, _ = reachAvoidSetB.simulator.create_boundary_function(R_B['Z_u'], lipschitz_B)
+        z_l_B, _ = reachAvoidSetB.simulator.create_boundary_function(R_B['Z_l'], lipschitz_B)
+        
+        reachAvoidSetA.plot(True, False, True, X_Ta, R_A, title="A")
+        reachAvoidSetB.plot(True, False, True, X_Tb, R_B, title="B")
+        
+        
         X_T = []
         # Loop through the switching points excluding START and END
         # range(1, len(switching_points)-1) -> 1 to len(switching_points)-2
         for i in range(1, len(switching_points) - 1):
-            X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"])
-            X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"])
+            X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"], [z_u_A, z_l_A])
+            X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"], [z_u_B, z_l_B])
+            print(f"X_T1a: {X_Ta} \nX_T1b: {X_Tb}")
             X_T.append(getTargetSetIntersection(switching_points[i]["A"], X_Ta, X_Tb))
         
         # X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
@@ -277,8 +323,6 @@ if __name__ == "__main__":
         xEnd_4 = switched_path[3][1]
         print(f"x0_4: {x0_4} \txEnd_4: {xEnd_4}")
         
-        lipschitz_A = reachAvoidSetA.lipschitz_const
-        lipschitz_B = reachAvoidSetB.lipschitz_const
         
         # Implement a controller to go from the start of the path segment to the end
         # Create boundary functions for reach-avoid set for path segment 1
@@ -318,12 +362,16 @@ if __name__ == "__main__":
         trajectory4 = reachAvoidSetB.reach_calc.integrate(x0_4, u=u, direction="forward", events=events)
         
         # Plot all path-switching trajectories on 1 figure.
-        fig, axes = plt.subplots(2, 2)
+        fig, axes = plt.subplots(3, 2)
+        # Reach Avoid Set A
+        reachAvoidSetA.plot(True, False, False, X_Ta, R_A, title= "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^A)$",ax=axes[0, 0])
+        # Reach Avoid Set B
+        reachAvoidSetB.plot(True, False, False, X_Tb, R_B, title="Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^B)$", ax=axes[0, 1])
         # Path segment 1
-        reachAvoidSetA.plot(True, False, False, X_T[0], R_P1, trajectory1, "Trajectory for Path Segment 1", axes[0, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[1], R_P2, trajectory2, "Trajectory for Path Segment 2", axes[0, 1])
-        reachAvoidSetA.plot(True, False, False, X_T[2], R_P3, trajectory3, "Trajectory for Path Segment 3", axes[1, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[3], R_P4, trajectory4, "Trajectory for Path Segment 4", axes[1, 1])
+        reachAvoidSetA.plot(True, False, False, X_T[0], R_P1, trajectory1, "Trajectory for Path Segment 1", axes[1, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[1], R_P2, trajectory2, "Trajectory for Path Segment 2", axes[1, 1])
+        reachAvoidSetA.plot(True, False, False, X_T[2], R_P3, trajectory3, "Trajectory for Path Segment 3", axes[2, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[3], R_P4, trajectory4, "Trajectory for Path Segment 4", axes[2, 1])
         
         plt.tight_layout()
         plt.show()

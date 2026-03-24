@@ -99,20 +99,20 @@ class ReachabilityCalculator:
         x_state = np.array([s_val, self.C_l(s_val)])
     
         return self.calculate_S(x_state)
-        
-    """
-    Finds the roots of S(x)=0 on the upper and lower boundaries.
     
-    Args:
-        x_points (np.ndarray): The discrete x1-points to check for sign changes.
-
-    Returns:
-        tuple[list, list, list]: A tuple containing:
-            - lowerRoots (list): Sorted roots found on lower boundary.
-            - upperRoots (list): Sorted roots found on upper boundary.
-            - roots (list): Sorted roots found on both boundaries.
-    """   
     def find_S_roots(self, x_points: np.ndarray) -> list:
+        """
+        Finds the roots of S(x)=0 on the upper and lower boundaries.
+        
+        Args:
+            x_points (np.ndarray): The discrete x1-points to check for sign changes.
+
+        Returns:
+            tuple[list, list, list]: A tuple containing:
+                - lowerRoots (list): Sorted roots found on lower boundary.
+                - upperRoots (list): Sorted roots found on upper boundary.
+                - roots (list): Sorted roots found on both boundaries.
+        """ 
         # Evaluate S at all s points to find sign changes
         S_values_on_Vu = [self.S_on_upper_boundary(s) for s in x_points]
         S_values_on_Vl = [self.S_on_lower_boundary(s) for s in x_points]
@@ -257,8 +257,7 @@ class ReachabilityCalculator:
         
         # If state is above the boundary, raise error
         if x2 > cu_val + tol:
-            print(f"State (x1={x1:.6f}, x2={x2:.6f}) is above the upper boundary C_u(x1)={cu_val:.6f}.")
-            return False
+            raise ValueError(f"is_on_upper_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is above the upper boundary C_u(x1)={cu_val:.6f}.")
         # If state is within tolerance below or at the boundary, return True
         elif x2 <= cu_val + tol and x2 >= cu_val - tol:
             return True
@@ -283,8 +282,7 @@ class ReachabilityCalculator:
         
         # If state is below the boundary, raise error
         if x2 < cl_val - tol:
-            print(f"State (x1={x1:.6f}, x2={x2:.6f}) is below the lower boundary C_l(x1)={cl_val:.6f}.")
-            return False
+            raise ValueError(f"is_on_lower_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is below the lower boundary C_l(x1)={cl_val:.6f}.")
         # If state is within tolerance above or at the boundary, return True
         elif x2 >= cl_val - tol and x2 <= cl_val + tol:
             return True

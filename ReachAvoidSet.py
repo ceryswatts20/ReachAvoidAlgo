@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Callable, Dict
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -110,7 +110,7 @@ class ReachAvoidSet:
         if self._debug:
             print(f"Lipschitz constant: {self.lipschitz_const:.4f}")
 
-    def compute(self, X_T: list) -> set:
+    def compute(self, X_T: list) -> Dict[str, tuple]:
         """
         Computes the reach-avoid set for a given target set i.e R(X_T).
 
@@ -118,7 +118,7 @@ class ReachAvoidSet:
             X_T (list): Target set [x1_target, x2_min, x2_max].
 
         Returns:
-            set: The reach-avoid set R(X_T) as a set of (x1, x2) tuples. i.e (Z_l,Z_u).
+            Dictionary[str, tuple]: The reach-avoid set R(X_T) as a
         """
         
         self._X_T = X_T
@@ -171,11 +171,17 @@ class ReachAvoidSet:
             ax.legend()
             plt.tight_layout()
             plt.show()
-
+            
         # Initialise the reachability calculator
         reach_calc = self.reach_calc
-        # Generate partition
-        _, _, roots = reach_calc.find_S_roots(self._x1_star)
+        # Find roots of S(x)
+        lower_roots, upper_roots, _ = reach_calc.find_S_roots(self._x1_star)
+        
+        if self._debug:
+            print(f"x0_l: {x0_l} \t x0_u: {x0_u}")
+            print(f"x_a: {tuple(map(float, x_a))} \t x_d: {tuple(map(float, x_d))}")
+            print(f"upper_roots: {upper_roots} \t lower_roots: {lower_roots}")
+            
         # Initialise sets Z_u and Z_l
         Z_u = set()
         Z_l = set()
@@ -190,14 +196,14 @@ class ReachAvoidSet:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, x_d, x_a, u=1, debug=self._debug))
+            Z_l = T_star_l.union(reach_calc.extend(self._C_l, lower_roots, x_d, x_a, u=1, debug=self._debug))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, x_d, x_a, u=0, debug=self._debug))
+            Z_u = T_star_u.union(reach_calc.extend(self._C_u, upper_roots, x_d, x_a, u=0, debug=self._debug))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -208,7 +214,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is on the lower boundary.")
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self._C_l, roots, [0, 0], x_a, u=1, debug=self._debug))
+                Z_l = T_star_l.union(reach_calc.extend(self._C_l, lower_roots, [0, 0], x_a, u=1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -219,7 +225,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self._C_u, roots, [0, 0], x_d, u=0, debug=self._debug))
+                Z_u = T_star_u.union(reach_calc.extend(self._C_u, upper_roots, [0, 0], x_d, u=0, debug=self._debug))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")
@@ -235,13 +241,31 @@ class ReachAvoidSet:
             'Z_l': Z_l
         }
         
-    def getTargetSet(self, x1, tol=1e-2):
-        """Creates the maxmimum feasible target set at a given x1 point."""
+    def getTargetSet(self, x1: float | int, boundaries: list[Callable]=None, tol=1e-2) -> list[float | int]:
+        """Creates the maxmimum feasible target set at a given x1 point. By default the boundaries are Cu(x1) and Cl(x1).
         
-        # Get the minimum x2 value at x1
-        min_x2 = float(self._C_l(x1)) + tol
-        # Get the maximum x2 value at x1
-        max_x2 = float(self._C_u(x1)) - tol
+        Args:
+            x1 (float | int):
+            boundaries (list[Callable]): A list containing the upper and lower boundaries as functions. By default, [self._C_u, self._C_l]
+            tol (float):
+            
+        Returns:
+            list[float | int]: The maximum feasible target set at x1 within the given boundaries.
+        
+        """
+        
+        # If no boundaries are passed, use the VLC boundaries
+        if boundaries is None:
+            # Get the minimum x2 value at x1
+            min_x2 = float(self._C_l(x1)) + tol
+            # Get the maximum x2 value at x1
+            max_x2 = float(self._C_u(x1)) - tol
+        else:
+            upper, lower = boundaries
+            # Get the minimum x2 value at x1
+            min_x2 = float(lower(x1)) + tol
+            # Get the maximum x2 value at x1
+            max_x2 = float(upper(x1)) - tol
         
         return [x1, min_x2, max_x2]
 
