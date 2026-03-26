@@ -2,7 +2,7 @@ from typing import Callable
 
 import numpy as np
 from scipy.optimize import root_scalar
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_bvp, solve_ivp
 
 import HelperFunctions
 from Simulator import Simulator
@@ -411,6 +411,67 @@ class ReachabilityCalculator:
         # Return the trajectory as an array of shape (N, 2)
         return sol.sol(t_dense).T
     
+    def integrate_trajectory(self, x_initial: np.ndarray, x_target: np.ndarray, u: Callable) -> np.ndarray:
+        """
+        Find trajectory from x_initial to x_target satisfying boundary conditions.
+    
+        Solves a boundary value problem to compute a trajectory where both the
+        initial and final states are fixed. The system evolves under double
+        integrator dynamics with control u.
+        
+        Args:
+            x_initial (np.ndarray): Initial state [x1, x2].
+            x_target (np.ndarray): Target state [x1, x2].
+            u (Callable): Control function u(t, x returning u between [0, 1].
+        
+        Returns:
+            np.ndarray: Trajectory of shape (500, 2) with columns [x1, x2].
+        
+        Raises:
+            RuntimeError: If BVP solver does not converge.
+        """
+            
+        # Define the system dynamics for integrating forward using the control input 
+        dynamics = lambda t, x: self.boundarySim.get_double_integrator_dynamics(t, x, 'forward', u)
+        
+        """
+            x_start: state at t=0, shape (2,)
+            x_end: state at t=T, shape (2,)
+            
+            Return residuals that should equal zero:
+            - x1(0) should equal x_initial[0]
+            - x2(0) should equal x_initial[1]
+            - x1(T) should equal x_target[0]
+            - x2(T) should equal x_target[1]
+            """
+        fixed_endpoints = lambda x_start, x_end: [
+                x_start[0] - x_initial[0],
+                x_start[1] - x_initial[1],
+                x_end[0] - x_target[0],
+                x_end[1] - x_target[1]
+            ]
+        
+        # Create initial guess
+        # For a double integrator, assume roughly constant acceleration
+        n_points = 100
+        t_guess = np.linspace(0, 1, n_points)
+        # x1 goes linearly from start to target
+        x1_guess = np.linspace(x_initial[0], x_target[0], n_points)
+        # Velocity rises then falls to enforce zero endpoints
+        x2_guess = np.sin(np.pi * t_guess)
+        x_guess = np.array([x1_guess, x2_guess])
+        
+        # Integrate the dynamics using solve_bvp which will enforce the given conditions at both endpoints (start and end).
+        # max_nodes - allow more mesh points if needed
+        sol = solve_bvp(dynamics, fixed_endpoints, t_guess, x_guess, max_nodes=1000, tol=1e-6)
+        # Extract solution on dense time grid
+        if not sol.success:
+            raise RuntimeError(f"Warning: BVP solver did not converge. Message: {sol.message}")
+        
+        t_dense = np.linspace(0, 1, 500)
+        # Shape: (500, 2)
+        return sol.sol(t_dense).T
+    
     
     """
         TODO: Write method description
@@ -657,5 +718,7 @@ class ReachabilityCalculator:
                 
                 if debug:
                     print(f"23: Updated y to the left most point of Z: y: {y[0]:.6f}, {y[1]:.6f}")
+        if debug:
+            print("24: Return Z")
         # Line 24
         return Z
