@@ -1,3 +1,4 @@
+import select
 from typing import Callable, Set
 
 import numpy as np
@@ -17,11 +18,12 @@ class Simulator:
         max_tau (np.ndarray): Maximum joint torques.
         manipulator_dynamics_instance (ManipulatorDynamics): Instance of ManipulatorDynamics for dynamics calculations.
     """
-    def __init__(self, min_tau: np.ndarray, max_tau: np.ndarray, manipulator_dynamics_instance: ManipulatorDynamics):
+    def __init__(self, min_tau: np.ndarray, max_tau: np.ndarray, manipulator_dynamics_instance: ManipulatorDynamics, debug: bool = False):
         
         self.min_tau = min_tau
         self.max_tau = max_tau
         self.dynamics = manipulator_dynamics_instance
+        self._debug = debug
     
     """
     Calculates the joint acceleration bounds at a given (x1, x2)
@@ -170,17 +172,19 @@ class Simulator:
         # Return both the function and its coefficients
         return lambda x1: np.polyval(c_optimal, x1), c_optimal
     
-    def create_boundary_function(self, boundary_pts: (np.ndarray | Set), lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
+    def create_boundary_function(self, boundary_pts: (np.ndarray | Set), is_upper: bool, lipschitz_const: float, x1_pts: np.ndarray = None,  degree: int = 10):
         """
         Create a polynomial boundary function with a safety margin.
         
         Fits a polynomial to boundary points and applies a safety margin based on
-        the Lipschitz constant to ensure feasibility.
+        the Lipschitz constant. For upper boundaries, the margin pushes the 
+        polynomial downward; for lower boundaries, upward.
         
         Args:
             boundary_pts (np.ndarray | Set): Boundary points. Either a numpy array
                 of x2 values or a set of (x1, x2) tuples. If set, tuples are 
                 automatically sorted and unpacked.
+            is_upper (bool): True if boundary_pts is an upper boundary, False if lower.
             lipschitz_const (float): Lipschitz constant for safety margin calculation.
             x1_pts (np.ndarray, optional): x1 coordinate points. Required if 
                 boundary_pts is a numpy array. Defaults to None.
@@ -188,12 +192,17 @@ class Simulator:
         
         Returns:
             tuple: A tuple containing:
-                - boundary (callable): Lambda function of the adjusted boundary 
-                polynomial, takes x1 and returns x2 value.
-                - coeffs_adjusted (np.ndarray): Adjusted polynomial coefficients
-                with safety margin applied.
+                - boundary (callable): Adjusted boundary polynomial function.
+                - coeffs_adjusted (np.ndarray): Polynomial coefficients with margin applied.
+        
+        Raises:
+            ValueError: If x1_pts is None when boundary_pts is a numpy array.
+        
+        Notes:
+            Lower boundary case not yet implemented (assumes lower boundary is 0).
         """
         
+        debug = self._debug
         # If boundary_pts is a set
         if isinstance(boundary_pts, set):
             # Convert set of (x1, x2) tuples to 2 arrays of x1 and x2 pts
@@ -207,9 +216,23 @@ class Simulator:
         
         # Safety margin based on Lipschitz constant
         safety_diff = lipschitz_const * (x1_pts[1] - x1_pts[0]) / 2
-        # Subtract safety margin from the constant term of the polynomial to ensure C_u is below the upper boundary by at least the safety margin
+        if debug:
+            if is_upper:
+                print("Upper boundary")
+            else:
+                print("Lower boudnary")
+            print(f"safety_diff: {safety_diff}")
+        
+        
         coeffs_adjusted = coeffs.copy()
-        coeffs_adjusted[-1] -= safety_diff
+        if is_upper:
+            # Subtract safety margin from the constant term of the polynomial to ensure the polynomial is below the upper boundary by at least the safety margin
+            coeffs_adjusted[-1] -= safety_diff
+        # Not implemented for now as the lower boundary is currently always 0
+        # else:
+        #     # Add safety margin to the constant term of the polynomial to ensure the polynomial is above the lower boundary by at least the safety margin
+        #     coeffs_adjusted[-1] += safety_diff
+        
         # Create the adjusted boundary function with the safety margin
         boundary = lambda x1: np.polyval(coeffs_adjusted, x1)
         

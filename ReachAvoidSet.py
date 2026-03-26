@@ -71,7 +71,7 @@ class ReachAvoidSet:
 
         # Robot Dynamics and Simulator
         self._robot_dynamics = ManipulatorDynamics(self._m, self._L, self._q_start, self._q_end, self._robot_type)
-        self.simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics)
+        self.simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics, self._debug)
 
         # Compute the VLC, V_u and V_l and the boundary functions C_u(x1) and C_l(x1)
         self._x1_star = np.linspace(0, 1, 101)
@@ -100,7 +100,7 @@ class ReachAvoidSet:
         # Set lower boundary set to zero
         V_l = np.zeros_like(V_u)
         # Fit polynomial to upper boundary set to get C_u(x1) with a safety margin based on the Lipschitz constant
-        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(V_u, self.lipschitz_const, x1_star)
+        self._C_u, self._C_u_coeffs = self.simulator.create_boundary_function(V_u, True, self.lipschitz_const, x1_star)
         
         self._C_l = lambda x1: np.zeros_like(np.asarray(x1, dtype=float))
         self._C_l_coeffs = np.zeros(poly_degree + 1)
@@ -253,7 +253,7 @@ class ReachAvoidSet:
             list[float | int]: The maximum feasible target set at x1 within the given boundaries.
         
         """
-        
+        debug = self._debug
         # If no boundaries are passed, use the VLC boundaries
         if boundaries is None:
             # Get the minimum x2 value at x1
@@ -262,6 +262,8 @@ class ReachAvoidSet:
             max_x2 = float(self._C_u(x1)) - tol
         else:
             upper, lower = boundaries
+            if debug:
+                print(f"lower(x1): {lower(x1)} \t upper(x1): {upper(x1)}")
             # Get the minimum x2 value at x1
             min_x2 = float(lower(x1)) + tol
             # Get the maximum x2 value at x1
@@ -282,7 +284,7 @@ class ReachAvoidSet:
         Raises:
             RuntimeError: If compute() has not been called yet.
         """
-        
+        debug = self._debug
         # Create a new figure if no ax is provided
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 5))
@@ -321,7 +323,7 @@ class ReachAvoidSet:
             I_in_lower, I_out_lower, _ = self.reach_calc.generate_partition_I(lower_roots, self._C_l)
             I_in_upper, I_out_upper, _ = self.reach_calc.generate_partition_I(upper_roots, self._C_u)
             
-            if True:
+            if debug:
                 print(f"{roots}")
                 print(f"Found lower roots: {lower_roots}")
                 print(f"I_in lower boundary: {I_in_lower}")
@@ -400,8 +402,8 @@ class ReachAvoidSet:
             Z_u = ras['Z_u']
             Z_l = ras['Z_l']
             # Z boundaries as functions, to allow shading
-            z_u, _ = self.simulator.create_boundary_function(Z_u, self.lipschitz_const)
-            z_l, _ = self.simulator.create_boundary_function(Z_l, self.lipschitz_const)
+            z_u, _ = self.simulator.create_boundary_function(Z_u, True, self.lipschitz_const)
+            z_l, _ = self.simulator.create_boundary_function(Z_l, False, self.lipschitz_const)
             
             # Fill between the upper and lower boundaries to show the reach-avoid set
             mask = (x1_fine >= 0) & (x1_fine <= X_T[0])
