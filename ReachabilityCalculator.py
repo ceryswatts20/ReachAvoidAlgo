@@ -264,7 +264,6 @@ class ReachabilityCalculator:
         else:
             return False
         
-    
     """
         Check if the state (x1, x2) lies on the lower boundary curve C_l(x1)
         within a tolerance.
@@ -288,8 +287,6 @@ class ReachabilityCalculator:
             return True
         else:
             return False
-        
-    
     
     @staticmethod
     def event_x1_cross(t, x, x1_target):
@@ -336,7 +333,7 @@ class ReachabilityCalculator:
         x2 = float(x[1])
         return float(x2 - boundary(x1))
     
-    def _make_events(self, x1_target: float, upper_boundary: Callable, lower_boundary: Callable):
+    def _make_events(self, x1_target: float = None, upper_boundary: Callable = None, lower_boundary: Callable = None):
         """
         Creates and configures ODE stop event functions.
         
@@ -346,28 +343,40 @@ class ReachabilityCalculator:
             lower_boundary (Callable): 
         """
         
+        events = []
+        
         # Stop when crossing the x-axis (x2=0)
         cross_x_axis = self.event_x2_zero
-        # Stop when crossing x1_target
-        cross_x1_target = lambda t, x, xt=x1_target: self.event_x1_cross(t, x, xt)
-        # Stop when crossing the boundary functions
-        cross_upper = lambda t, x, upper=upper_boundary: self.event_cross_boundary(t, x, upper)
-        cross_lower = lambda t, x, lower=lower_boundary: self.event_cross_boundary(t, x, lower)
-        
-        # Set all events to be terminal and to trigger on both directions of crossing
-        for event in [cross_x_axis, cross_x1_target, cross_upper, cross_lower]:
-            event.terminal = True
-        
-        cross_x1_target.direction = 0
-        # Triggers when crossing from negative to positive
-        cross_upper.direction = 1
-        # Triggers when crossing from positive to negative
+        cross_x_axis.terminal = True
         cross_x_axis.direction = -1
-        cross_lower.direction = -1
+        events.append(cross_x_axis)
+        
+        # Stop when crossing x1_target
+        if x1_target is not None:
+            cross_x1_target = lambda t, x, xt=x1_target: self.event_x1_cross(t, x, xt)
+            cross_x1_target.terminal = True
+            cross_x1_target.direction = 0
+            events.append(cross_x1_target)
+            
+        # Stop when crossing the upper boundary
+        if upper_boundary is not None:
+            cross_upper = lambda t, x, upper=upper_boundary: self.event_cross_boundary(t, x, upper)
+            cross_upper.terminal = True
+            # Triggers when crossing from negative to positive
+            cross_upper.direction = 1
+            events.append(cross_upper)
+            
+        # Stop when crossing the lower boundary
+        if lower_boundary is not None:
+            cross_lower = lambda t, x, lower=lower_boundary: self.event_cross_boundary(t, x, lower)
+            cross_lower.terminal = True
+            # Triggers when crossing from positive to negative
+            cross_lower.direction = -1
+            events.append(cross_lower)
 
-        return [cross_x_axis, cross_x1_target, cross_upper, cross_lower]
+        return events
     
-    def integrate(self, x0: np.ndarray, u: int | float | Callable, events: int | float | list[float | Callable], direction: str) -> np.ndarray:
+    def integrate(self, x0: np.ndarray, u: int | float | Callable, direction: str, events: int | float | list[float | Callable]=None) -> np.ndarray:
         """
         Integrates the system dynamics from x0 until an event occurs.
 
@@ -383,15 +392,18 @@ class ReachabilityCalculator:
         
         # Define the dynamics function for integration based on the control input and direction
         dynamics = lambda t, x: self.boundarySim.get_double_integrator_dynamics(t, x, direction, u)
-        # If events is a float then it is x1_target, default to passing Cu and Cl as boundaries
-        if isinstance(events, float) or isinstance(events, int):
-            x1_target = events
-            upper_boundary = self.C_u
-            lower_boundary = self.C_l
+        if events is not None:
+            # If events is a float then it is x1_target, default to passing Cu and Cl as boundaries and backward direction
+            if isinstance(events, float) or isinstance(events, int):
+                x1_target = events
+                upper_boundary = self.C_u
+                lower_boundary = self.C_l
+            else:
+                x1_target, upper_boundary, lower_boundary = events
+            # Create event functions for stopping conditions
+            events = self._make_events(x1_target, upper_boundary, lower_boundary)
         else:
-            x1_target, upper_boundary, lower_boundary = events
-        # Create event functions for stopping conditions
-        events = self._make_events(x1_target, upper_boundary, lower_boundary)
+            events = None
         # Large time span to ensure we integrate until an event occurs
         tspan = (0.0, 10.0)
         # Integrate the dynamics using solve_ivp with the defined events
@@ -410,68 +422,7 @@ class ReachabilityCalculator:
         
         # Return the trajectory as an array of shape (N, 2)
         return sol.sol(t_dense).T
-    
-    def integrate_trajectory(self, x_initial: np.ndarray, x_target: np.ndarray, u: Callable) -> np.ndarray:
-        """
-        Find trajectory from x_initial to x_target satisfying boundary conditions.
-    
-        Solves a boundary value problem to compute a trajectory where both the
-        initial and final states are fixed. The system evolves under double
-        integrator dynamics with control u.
         
-        Args:
-            x_initial (np.ndarray): Initial state [x1, x2].
-            x_target (np.ndarray): Target state [x1, x2].
-            u (Callable): Control function u(t, x returning u between [0, 1].
-        
-        Returns:
-            np.ndarray: Trajectory of shape (500, 2) with columns [x1, x2].
-        
-        Raises:
-            RuntimeError: If BVP solver does not converge.
-        """
-            
-        # Define the system dynamics for integrating forward using the control input 
-        dynamics = lambda t, x: self.boundarySim.get_double_integrator_dynamics(t, x, 'forward', u)
-        
-        """
-            x_start: state at t=0, shape (2,)
-            x_end: state at t=T, shape (2,)
-            
-            Return residuals that should equal zero:
-            - x1(0) should equal x_initial[0]
-            - x2(0) should equal x_initial[1]
-            - x1(T) should equal x_target[0]
-            - x2(T) should equal x_target[1]
-            """
-        fixed_endpoints = lambda x_start, x_end: [
-                x_start[0] - x_initial[0],
-                x_start[1] - x_initial[1],
-                x_end[0] - x_target[0],
-                x_end[1] - x_target[1]
-            ]
-        
-        # Create initial guess
-        # For a double integrator, assume roughly constant acceleration
-        n_points = 100
-        t_guess = np.linspace(0, 1, n_points)
-        # x1 goes linearly from start to target
-        x1_guess = np.linspace(x_initial[0], x_target[0], n_points)
-        # Velocity rises then falls to enforce zero endpoints
-        x2_guess = np.sin(np.pi * t_guess)
-        x_guess = np.array([x1_guess, x2_guess])
-        
-        # Integrate the dynamics using solve_bvp which will enforce the given conditions at both endpoints (start and end).
-        # max_nodes - allow more mesh points if needed
-        sol = solve_bvp(dynamics, fixed_endpoints, t_guess, x_guess, max_nodes=1000, tol=1e-6)
-        # Extract solution on dense time grid
-        if not sol.success:
-            raise RuntimeError(f"Warning: BVP solver did not converge. Message: {sol.message}")
-        
-        t_dense = np.linspace(0, 1, 500)
-        # Shape: (500, 2)
-        return sol.sol(t_dense).T
-    
     
     """
         TODO: Write method description
@@ -573,7 +524,7 @@ class ReachabilityCalculator:
                             print("y not on boundary")
                         # Integrate backwards in time from y with control u
                         # until crossing a boundary (Cu/Cl) or reaching the interval end
-                        T_b = self.integrate(y, u, interval[1], direction='backward')
+                        T_b = self.integrate(y, u, events=interval[1], direction='backward')
                         
                         # If no trajectory points found, raise error
                         if len(T_b) == 0:
@@ -667,7 +618,7 @@ class ReachabilityCalculator:
                     
                     # Integrate backwards in time from y with control u
                     # until crossing a boundary (Cu/Cl) or reaching the interval end
-                    T_b = self.integrate(y, u, interval[1], direction='backward')
+                    T_b = self.integrate(y, u, events=interval[1], direction='backward')
                     
                     # If no trajectory points found, raise error
                     if len(T_b) == 0:
