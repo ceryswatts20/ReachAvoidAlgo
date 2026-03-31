@@ -52,7 +52,7 @@ if __name__ == "__main__":
         poly_degree = 6
         C_l = lambda x1: np.zeros_like(x1)
         C_l_coeffs = np.zeros(poly_degree + 1)
-        C_u, C_u_coeffs = simulator.create_boundary_function(V_u, lipschitz[1], x1_star)
+        C_u, C_u_coeffs = simulator.create_boundary_function(V_u, True, lipschitz[1], x1_star)
 
         print("\n--- Finding roots of S(x) on the boundaries ---")
         reach_calc = ReachabilityCalculator(C_u, C_l, simulator, C_u_coeffs, C_l_coeffs)
