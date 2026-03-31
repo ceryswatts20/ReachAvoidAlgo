@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ReachAvoidSet import ReachAvoidSet
+import Simulator
 
 def findX1(qStart, qEnd, p, theta=np.array([0, 0])):
     """Finds the value of x1 for a point p on the path defined by qStart and qEnd, with an optional theta offset.
@@ -130,7 +131,7 @@ def arePathsParallel(qA: Callable, qB: Callable) -> bool:
         return False
     
     
-def controller(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
+def basicController(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
     """Compute blending factor y(x) ∈ [0, 1].
 
     y=1 drives the system toward the lower boundary (max accel),
@@ -159,6 +160,64 @@ def controller(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
     # Clamp to [0, 1] to guarantee boundaries are never crossed
     return float(np.clip(y, 0.0, 1.0))
 
+def controller(t, x, x_target, Zu: Callable, Zl: Callable, sim: Simulator, tol: float = 0.5) -> float:
+    """
+    Blending controller that stays within boundaries and reaches x_target with x2=0.
+    
+    Args:
+        x: Current state [x1, x2].
+        x_target: Target state [x1_target, x2_target=0].
+        Zu, Zl: Upper/lower boundary functions.
+        L, U: Min/max acceleration bounds.
+        tol: Tolerance band near boundaries.
+    
+    Returns:
+        float: Blending factor y(x) in [0, 1].
+    """
+    
+    # Current State
+    x1, x2 = x
+    # Target State
+    x1_target, x2_target = x_target
+    # Distance to target
+    dx = x1_target - x1
+    # Get acceleration bounds
+    L, U = sim.get_accel_bounds(x1, x2)
+    
+    # Compute stopping distance needed to reach target velocity
+    if L < 0:  # valid deceleration
+        stopping_distance = (x2**2 - x2_target**2) / (2 * abs(L))
+    else:
+        stopping_distance = float('inf')
+    
+    # If overshooting target, decelerate
+    if dx < 0:
+        return 0
+    
+    # Priority 2: Adaptive deceleration based on boundary proximity
+    zu = Zu(x1)
+    zl = Zl(x1)
+    
+    # Distance to boundaries
+    dist_to_upper = zu - x2
+    dist_to_lower = x2 - zl
+    
+    # Compute achievable deceleration margin
+    # If close to boundaries, reduce margin since controller will blend
+    boundary_range = zu - zl
+    if boundary_range > 0:
+        normalized_dist = min(dist_to_upper, dist_to_lower) / boundary_range
+        # Margin ranges from 1.3 (far from boundaries) to 1.05 (near boundaries)
+        safety_margin = 1.3 - 0.25 * (1 - normalized_dist)
+    else:
+        safety_margin = 1.2
+    
+    if 0 < dx <= safety_margin * stopping_distance:
+        return 0
+    
+    # Far from target: use boundary-based blending
+    return basicController(t, x, Zu, Zl)
+
 if __name__ == "__main__":
     try:
         # Given paths
@@ -171,8 +230,7 @@ if __name__ == "__main__":
         qBs = lambda s: qB_start + s * (qB_end - qB_start)
         # Dummy path used to test parallel paths method
         qCs = lambda s : qA_start + s * (qA_end/2 - qA_start)
-        
-        arePathsParallel(qAs, qBs)
+        # Test
         arePathsParallel(qAs, qCs)
         
         # Swithing path points in joint space
@@ -252,6 +310,8 @@ if __name__ == "__main__":
         reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
         lipschitz_A = reachAvoidSetA.lipschitz_const
         lipschitz_B = reachAvoidSetB.lipschitz_const
+        simA = reachAvoidSetA.simulator
+        simB = reachAvoidSetB.simulator
         # Create target sets
         X_Ta = reachAvoidSetA.getTargetSet(1)
         X_Tb = reachAvoidSetB.getTargetSet(1)
@@ -260,106 +320,73 @@ if __name__ == "__main__":
         R_A = reachAvoidSetA.compute(X_Ta)
         R_B = reachAvoidSetB.compute(X_Tb)
         # Create boundary functions for reach-avoid set A
-        z_u_A, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_u'], lipschitz_A)
-        z_l_A, _ = reachAvoidSetA.simulator.create_boundary_function(R_A['Z_l'], lipschitz_A)
+        z_u_A, _ = simA.create_boundary_function(R_A['Z_u'], True, lipschitz_A)
+        z_l_A, _ = simA.create_boundary_function(R_A['Z_l'], False, lipschitz_A)
         # Create boundary functions for reach-avoid set B
-        z_u_B, _ = reachAvoidSetB.simulator.create_boundary_function(R_B['Z_u'], lipschitz_B)
-        z_l_B, _ = reachAvoidSetB.simulator.create_boundary_function(R_B['Z_l'], lipschitz_B)
+        z_u_B, _ = simB.create_boundary_function(R_B['Z_u'], True, lipschitz_B)
+        z_l_B, _ = simB.create_boundary_function(R_B['Z_l'], False, lipschitz_B)
         
-        reachAvoidSetA.plot(True, False, True, X_Ta, R_A, title="A")
-        reachAvoidSetB.plot(True, False, True, X_Tb, R_B, title="B")
-        
-        
+        # Create target sets for each path segment
         X_T = []
         # Loop through the switching points excluding START and END
         # range(1, len(switching_points)-1) -> 1 to len(switching_points)-2
         for i in range(1, len(switching_points) - 1):
             X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"], [z_u_A, z_l_A])
             X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"], [z_u_B, z_l_B])
-            print(f"X_T1a: {X_Ta} \nX_T1b: {X_Tb}")
+            print(f"X_T{i}a: {X_Ta} \nX_T{i}b: {X_Tb}")
             X_T.append(getTargetSetIntersection(switching_points[i]["A"], X_Ta, X_Tb))
-        
-        # X_T1a = reachAvoidSetA.getTargetSet(switching_points[1]["A"])
-        # X_T1b = reachAvoidSetB.getTargetSet(switching_points[1]["B"])
-        # print(f"X_T1a: {X_T1a} \nX_T1b: {X_T1b}")
-        # X_T1 = getTargetSetIntersection(switching_points[1]["A"], X_T1a, X_T1b)
-        # print(f"Intersecting Target Set, X_T1: {X_T1}")
-        
-        # X_T2a = reachAvoidSetA.getTargetSet(switching_points[2]["A"])
-        # X_T2b = reachAvoidSetB.getTargetSet(switching_points[2]["B"])
-        # print(f"X_T2a: {X_T2a} \nX_T2b: {X_T2b}")
-        # X_T2 = getTargetSetIntersection(switching_points[2]["B"], X_T2a, X_T2b)
-        # print(f"Intersecting Target Set, X_T2: {X_T2}")
-        
-        # X_T3a = reachAvoidSetA.getTargetSet(switching_points[3]["A"])
-        # X_T3b = reachAvoidSetB.getTargetSet(switching_points[3]["B"])
-        # print(f"X_T3a: {X_T3a} \nX_T3b: {X_T3b}")
-        # X_T3 = getTargetSetIntersection(switching_points[3]["A"], X_T3a, X_T3b)
-        # print(f"Intersecting Target Set, X_T3: {X_T3}")
-        
+        # Create target set for final path segment
         X_T.append(reachAvoidSetB.getTargetSet(switching_points[4]["B"]))
         print(f"X_T = {X_T}")
         
-        # Path Segment 1 RAS
-        R_P1 = reachAvoidSetA.compute(X_T[0])
-        # Path Segment 2 RAS
-        R_P2 = reachAvoidSetB.compute(X_T[1])
-        # Path Segment 3 RAS
-        R_P3 = reachAvoidSetA.compute(X_T[2])
-        # Path Segment 4 RAS
-        R_P4 = reachAvoidSetB.compute(X_T[3])
-        
-        # Path segments starting points, at rest
-        x0_1 = [switched_path[0][0], 0]
-        xEnd_1 = switched_path[0][1]
-        print(f"x0_1: {x0_1} \txEnd_1: {xEnd_1}")
-        x0_2 = [switched_path[1][0], 0]
-        xEnd_2 = switched_path[1][1]
-        print(f"x0_2: {x0_2} \txEnd_2: {xEnd_2}")
-        x0_3 = [switched_path[2][0], 0]
-        xEnd_3 = switched_path[2][1]
-        print(f"x0_3: {x0_3} \txEnd_3: {xEnd_3}")
-        x0_4 = [switched_path[3][0], 0]
-        xEnd_4 = switched_path[3][1]
-        print(f"x0_4: {x0_4} \txEnd_4: {xEnd_4}")
-        
-        
-        # Implement a controller to go from the start of the path segment to the end
-        # Create boundary functions for reach-avoid set for path segment 1
-        z_u_1, _ = reachAvoidSetA.simulator.create_boundary_function(R_P1['Z_u'], lipschitz_A)
-        z_l_1, _ = reachAvoidSetA.simulator.create_boundary_function(R_P1['Z_l'], lipschitz_A)
-        # Compute control input for the trajectory
-        u = lambda t, x: controller(t, x, z_u_1, z_l_1)
-        events = [xEnd_1, z_u_1, z_l_1]
-        # Compute the trajectory using the computed control input
-        trajectory1 = reachAvoidSetA.reach_calc.integrate(x0_1, u=u, direction="forward", events=events)
-        
-        # Create boundary functions for reach-avoid set for path segment 2
-        z_u_2, _ = reachAvoidSetB.simulator.create_boundary_function(R_P2['Z_u'], lipschitz_B)
-        z_l_2, _ = reachAvoidSetB.simulator.create_boundary_function(R_P2['Z_l'], lipschitz_B)
-        # Compute control input for the trajectory
-        u = lambda t, x: controller(t, x, z_u_2, z_l_2)
-        events = [xEnd_2, z_u_2, z_l_2]
-        # Compute the trajectory using the computed control input
-        trajectory2 = reachAvoidSetB.reach_calc.integrate(x0_2, u=u, direction="forward", events=events)
-        
-        # Create boundary functions for reach-avoid set for path segment 3
-        z_u_3, _ = reachAvoidSetA.simulator.create_boundary_function(R_P3['Z_u'], lipschitz_A)
-        z_l_3, _ = reachAvoidSetA.simulator.create_boundary_function(R_P3['Z_l'], lipschitz_A)
-        # Compute control input for the trajectory
-        u = lambda t, x: controller(t, x, z_u_3, z_l_3)
-        events = [xEnd_3, z_u_3, z_l_3]
-        # Compute the trajectory using the computed control input
-        trajectory3 = reachAvoidSetA.reach_calc.integrate(x0_3, u=u, direction="forward", events=events)
-        
-        # Create boundary functions for reach-avoid set for path segment 4
-        z_u_4, _ = reachAvoidSetB.simulator.create_boundary_function(R_P4['Z_u'], lipschitz_B)
-        z_l_4, _ = reachAvoidSetB.simulator.create_boundary_function(R_P4['Z_l'], lipschitz_B)
-        # Compute control input for the trajectory
-        u = lambda t, x: controller(t, x, z_u_4, z_l_4)
-        events = [xEnd_4, z_u_4, z_l_4]
-        # Compute the trajectory using the computed control input
-        trajectory4 = reachAvoidSetB.reach_calc.integrate(x0_4, u=u, direction="forward", events=events)
+        # Check if paths are parallel to determine switching point velocities
+        # If paths aren't parallel then switching points must have 0 velocity
+        # Path segments
+        R_P = []
+        # Path segment initial states, end states, and boundary functions
+        x0 = []
+        x_end = []
+        z_u = []
+        z_l = []
+        z = {'z_u': [], 'z_l': []}
+        # Trajectories for each path segment
+        trajectories = []
+        for i in range(0, len(switched_path)):
+            # Compute the initial state for each path segment, starting at rest (x2=0)
+            x0.append([switched_path[i][0], 0])
+            # Compute the end state for each path segment, at rest (x2=0)
+            x_end.append([switched_path[i][1], 0])
+            print(f"x0_{i+1}: {x0[i]} \tx_end_{i+1}: {x_end[i]}")
+            
+            # Check if the path segment is on path A or B
+            # Compute the path segment reach-avoid set
+            # Create boundary functions for the path segment's reach-avoid set
+            if switched_path[i][2] == "A":
+                R_P.append(reachAvoidSetA.compute(X_T[i]))
+                z_u.append(simA.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_A)[0])
+                z_l.append(simA.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_A)[0])
+            elif switched_path[i][2] == "B":
+                R_P.append(reachAvoidSetB.compute(X_T[i]))
+                z_u.append(simB.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_B)[0])
+                z_l.append(simB.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_B)[0])
+            else:
+                raise ValueError(f"Invalid path segment {i+1} path type: {switched_path[i][2]}")
+            # Add to boundary function to dictionary
+            z['z_u'].append(z_u[i])
+            z['z_l'].append(z_l[i])
+            
+            # Create controller for each path segment's trajectory
+            u = lambda t, x: basicController(t, x, z_u[i], z_l[i])
+            # Define the stop events for each path segment's trajectory
+            events = [x_end[i][0], z_u[i], z_l[i]]
+            # Compute the trajectory using the computed control input
+            if switched_path[i][2] == "A":
+                trajectories.append(reachAvoidSetA.reach_calc.integrate(x0[i], u, events=events, direction='forward'))
+            elif switched_path[i][2] == "B":
+                trajectories.append(reachAvoidSetB.reach_calc.integrate(x0[i], u, events=events, direction='forward'))
+            else:
+                raise ValueError(f"Invalid path segment {i+1} path type: {switched_path[i][2]}")
+            print(f"Trajectory {i+1} completed.")
         
         # Plot all path-switching trajectories on 1 figure.
         fig, axes = plt.subplots(3, 2)
@@ -367,11 +394,11 @@ if __name__ == "__main__":
         reachAvoidSetA.plot(True, False, False, X_Ta, R_A, title= "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^A)$",ax=axes[0, 0])
         # Reach Avoid Set B
         reachAvoidSetB.plot(True, False, False, X_Tb, R_B, title="Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^B)$", ax=axes[0, 1])
-        # Path segment 1
-        reachAvoidSetA.plot(True, False, False, X_T[0], R_P1, trajectory1, "Trajectory for Path Segment 1", axes[1, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[1], R_P2, trajectory2, "Trajectory for Path Segment 2", axes[1, 1])
-        reachAvoidSetA.plot(True, False, False, X_T[2], R_P3, trajectory3, "Trajectory for Path Segment 3", axes[2, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[3], R_P4, trajectory4, "Trajectory for Path Segment 4", axes[2, 1])
+        # Path segments
+        reachAvoidSetA.plot(True, False, False, X_T[0], R_P[0], trajectories[0], "Trajectory for Path Segment 1", axes[1, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[1], R_P[1], trajectories[1], "Trajectory for Path Segment 2", axes[1, 1])
+        reachAvoidSetA.plot(True, False, False, X_T[2], R_P[2], trajectories[2], "Trajectory for Path Segment 3", axes[2, 0])
+        reachAvoidSetB.plot(True, False, False, X_T[3], R_P[3], trajectories[3], "Trajectory for Path Segment 4", axes[2, 1])
         
         plt.tight_layout()
         plt.show()
