@@ -1,4 +1,5 @@
-from typing import Callable
+import re
+from typing import Callable, Dict
 
 from matplotlib import axes
 import numpy as np
@@ -6,6 +7,8 @@ import matplotlib.pyplot as plt
 
 from ReachAvoidSet import ReachAvoidSet
 import Simulator
+
+velocity_tol = 1e-2
 
 def findX1(qStart, qEnd, p, theta=np.array([0, 0])):
     """Finds the value of x1 for a point p on the path defined by qStart and qEnd, with an optional theta offset.
@@ -106,32 +109,85 @@ def getTargetSetIntersection(x1: float | int, XTa: list[float], XTb: list[float]
     
     return [x1, minx2, maxx2]
 
-def arePathsParallel(qA: Callable, qB: Callable) -> bool:
-    
-    qA_start = qA(0)
-    qA_end = qA(1)
-    qB_start = qB(0)
-    qB_end = qB(1)
-    direction_A = qA_end - qA_start
-    direction_B = qB_end - qB_start
-    
-    # Normalize directions
-    dir_A_norm = direction_A / np.linalg.norm(direction_A)
-    dir_B_norm = direction_B / np.linalg.norm(direction_B)
+def find_overlapping_velocities(qA: Callable, qB: Callable, switchingPoint: Dict, reachAvoidSetA: ReachAvoidSet, reachAvoidSetB: ReachAvoidSet, boundaries: list, tol: float = 1e-10, epsilon: float = 1e-8) -> list[float]:
+    """
 
-    # Check if parallel (dot product ≈ ±1)
-    dot_product = np.dot(dir_A_norm, dir_B_norm)
-    tolerance = 1e-6
+    Args:
+        qA (Callable): Path A function that takes a scalar input and returns a point in the joint space.
+        qB (Callable): Path B function that takes a scalar input and returns a point in the joint space.
+        switchingPoint (Dict): The x1 values of the switching point on each path.
+        reachAvoidSetA (ReachAvoidSet): Reach-avoid set for path A.
+        reachAvoidSetB (ReachAvoidSet): Reach-avoid set for path B.
+        tol (float): Tolerance for zero-length vectors and parallelism.
+        epsilon (float): Step size for numerical differentiation.
 
-    if np.abs(np.abs(dot_product) - 1) < tolerance:
-        print("Paths are parallel")
-        return True
+    Returns:
+        list[float]: [[x1, min_x2, max_x2], [y1, min_y2, max_y2]] for overlapping velocities.
+    """
+    
+    x1 = switchingPoint["A"]
+    y1 = switchingPoint["B"]
+    z_A = boundaries[0]
+    z_B = boundaries[1]
+    
+    # Numerical differentiation to get tangent vectors
+    direction_A = (qA(x1 + epsilon) - qA(x1 - epsilon)) / (2 * epsilon)
+    direction_B = (qB(y1 + epsilon) - qB(y1 - epsilon)) / (2 * epsilon)
+    
+    # Compute norms
+    norm_A = float(np.linalg.norm(direction_A))
+    norm_B = float(np.linalg.norm(direction_B))
+    
+    # Handle zero-length vectors: Trivially parallel.
+    if norm_A < tol or norm_B < tol:
+        print("One or both paths have zero-length tangent vectors at the switching point. Treating as parallel.")
+        return [[x1, 0, velocity_tol], [y1, 0, velocity_tol]]
+    
+    # Parallel check using cosine similarity
+    cos_angle = float(np.dot(direction_A, direction_B) / (norm_A * norm_B))
+    
+    # Check if the paths are parallel (cos_angle close to 1)
+    if np.isclose(cos_angle, 1.0):
+        print("Paths are parallel at this point.")
+        # Get the range of x2 values at the switching point
+        _, min_x2, max_x2 = reachAvoidSetA.getTargetSet(x1, z_A)
+        # Get the range of y2 values at the switching point
+        _, min_y2, max_y2 = reachAvoidSetB.getTargetSet(y1, z_B)
+
+        # Compute scaling ratio k where direction_A = k * direction_B
+        # Use largest component of direction_B to avoid division by near-zero values
+        idx = np.argmax(np.abs(direction_B))
+        k = float(direction_A[idx] / direction_B[idx])
+
+        # Scale path A's x2 range to path B's y2 scale for comparison
+        scaled_min_x2 = min_x2 * k
+        scaled_max_x2 = max_x2 * k
+        
+        # Find overlap in unified (path B) scale
+        overlap_min = max(scaled_min_x2, min_y2)
+        overlap_max = min(scaled_max_x2, max_y2)
+
+        # Check if ranges overlap
+        if overlap_min > overlap_max:
+            raise RuntimeError("No overlapping velocities between path A and path B at the switching point {switchingPoint}. Paths are parallel but have disjoint velocity ranges.")
+
+        # Convert overlap back to original path coordinates
+        X_Ta = [x1, overlap_min/k, overlap_max/k]
+        X_Tb = [y1, overlap_min, overlap_max]
+        
+        return [X_Ta, X_Tb]
+            
+    # If cos_angle is close to -1, the paths are anti-parallel
+    elif np.isclose(cos_angle, -1.0):
+        print("Paths are anti-parallel at this point.")
+    # If cos_angle is not close to 1 or -1, the paths are not parallel
     else:
-        print("Paths are not parallel")
-        return False
+        # Paths are not parallel, so the velocity at the switching point must be 0.
+        print("Paths are not parallel at this point.")
+        return [[x1, 0, velocity_tol], [y1, 0, velocity_tol]]
     
     
-def basicController(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float:
+def basicController(t, x, Zu: Callable, Zl: Callable) -> float:
     """Compute blending factor y(x) ∈ [0, 1].
 
     y=1 drives the system toward the lower boundary (max accel),
@@ -149,10 +205,10 @@ def basicController(t, x, Zu: Callable, Zl: Callable, tol: float = 0.5) -> float
     
     x1, x2 = x
     # If x2 is approaching the lower boundary
-    if x2 <= Zl(x1) + tol:
+    if x2 <= Zl(x1):
         return 1
     # If x2 is approaching the upper boundary
-    elif x2 >= Zu(x1) - tol:
+    elif x2 >= Zu(x1):
         return 0
     else:
         y = (x2 - Zu(x1))/(Zl(x1) - Zu(x1))
@@ -230,8 +286,6 @@ if __name__ == "__main__":
         qBs = lambda s: qB_start + s * (qB_end - qB_start)
         # Dummy path used to test parallel paths method
         qCs = lambda s : qA_start + s * (qA_end/2 - qA_start)
-        # Test
-        arePathsParallel(qAs, qCs)
         
         # Swithing path points in joint space
         start = np.array([27, 27])
@@ -308,51 +362,92 @@ if __name__ == "__main__":
         # Calculate the reach-avoid set for given paths - used to create path segment target sets
         reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
         reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
+        reachAvoidSetC = ReachAvoidSet("parameters.txt", qCs(0), qCs(1))
         lipschitz_A = reachAvoidSetA.lipschitz_const
         lipschitz_B = reachAvoidSetB.lipschitz_const
+        lipschitz_C = reachAvoidSetC.lipschitz_const
         simA = reachAvoidSetA.simulator
         simB = reachAvoidSetB.simulator
+        simC = reachAvoidSetC.simulator
         # Create target sets
         X_Ta = reachAvoidSetA.getTargetSet(1)
         X_Tb = reachAvoidSetB.getTargetSet(1)
+        X_Tc = reachAvoidSetC.getTargetSet(1)
         print(f"X_Ta: {X_Ta} \nX_Tb: {X_Tb}")
         # Compute the reach avoid set
         R_A = reachAvoidSetA.compute(X_Ta)
         R_B = reachAvoidSetB.compute(X_Tb)
+        R_C = reachAvoidSetC.compute(X_Tc)
         # Create boundary functions for reach-avoid set A
         z_u_A, _ = simA.create_boundary_function(R_A['Z_u'], True, lipschitz_A)
         z_l_A, _ = simA.create_boundary_function(R_A['Z_l'], False, lipschitz_A)
+        z_A = [z_u_A, z_l_A]
         # Create boundary functions for reach-avoid set B
         z_u_B, _ = simB.create_boundary_function(R_B['Z_u'], True, lipschitz_B)
         z_l_B, _ = simB.create_boundary_function(R_B['Z_l'], False, lipschitz_B)
+        z_B = [z_u_B, z_l_B]
+        # Create boundary functions for reach-avoid set C
+        z_u_C, _ = simC.create_boundary_function(R_C['Z_u'], True, lipschitz_C)
+        z_l_C, _ = simC.create_boundary_function(R_C['Z_l'], False, lipschitz_C)
+        z_C = [z_u_C, z_l_C]
         
         # Create target sets for each path segment
-        X_T = []
+        X_T = {"Start": [[0,0,0]], "End": []}
         # Loop through the switching points excluding START and END
         # range(1, len(switching_points)-1) -> 1 to len(switching_points)-2
         for i in range(1, len(switching_points) - 1):
-            X_Ta = reachAvoidSetA.getTargetSet(switching_points[i]["A"], [z_u_A, z_l_A])
-            X_Tb = reachAvoidSetB.getTargetSet(switching_points[i]["B"], [z_u_B, z_l_B])
-            print(f"X_T{i}a: {X_Ta} \nX_T{i}b: {X_Tb}")
-            X_T.append(getTargetSetIntersection(switching_points[i]["A"], X_Ta, X_Tb))
-        # Create target set for final path segment
-        X_T.append(reachAvoidSetB.getTargetSet(switching_points[4]["B"]))
+            # For each switching point, find the overlapping velocity range for the paths that intersect at that point to create the target set for the path segment.
+            x_Ta, x_Tb = find_overlapping_velocities(qAs, qBs, switching_points[i], reachAvoidSetA, reachAvoidSetB, [z_A, z_B])
+            # If the path segment is on path A, use X_Ta as the target set
+            if switched_path[i-1][2] == "A":
+                # Target set for the start of the next path segment
+                X_T["Start"].append(x_Tb)
+                # Target set for the end of path segment
+                X_T["End"].append(x_Ta)
+            # If the path segment is on path B, use X_Tb as the target set
+            elif switched_path[i-1][2] == "B":
+                # Target set for the start of the next path segment
+                X_T["Start"].append(x_Ta)
+                # Target set for the end of path segment
+                X_T["End"].append(x_Tb)
+            else:
+                raise ValueError(f"Invalid path segment {i} path type: {switched_path[i][2]}")
+            print(f"X_T{i}a: {x_Ta} \nX_T{i}b: {x_Tb}")
+            
+            # For testing parallel paths method
+            # xta1, xtc = find_overlapping_velocities(qAs, qCs, switching_points[i], reachAvoidSetA, reachAvoidSetC, [z_A, z_C])
+            # print(f"X_T{i}a1: {xta1} \nX_T{i}c: {xtc}")
+            
+        # Create target set for final path segment, which is always x2=0 as we want to end at rest.
+        if switched_path[-1][2] == "A":
+            X_T["End"].append([switching_points[4]["A"], 0, velocity_tol])
+        elif switched_path[-1][2] == "B":
+            X_T["End"].append([switching_points[4]["B"], 0, velocity_tol])
+        else:
+            raise ValueError(f"Invalid path segment {i} path type: {switched_path[i][2]}")
         print(f"X_T = {X_T}")
         
-        # Check if paths are parallel to determine switching point velocities
-        # If paths aren't parallel then switching points must have 0 velocity
+        # Plot all path-switching trajectories on 1 figure.
+        fig, axes = plt.subplots(3, 2)
+        # Reach Avoid Set A
+        reachAvoidSetA.plot(True, False, False, X_Ta, R_A, title= "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^A)$",ax=axes[0, 0])
+        # Reach Avoid Set B
+        reachAvoidSetB.plot(True, False, False, X_Tb, R_B, title="Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^B)$", ax=axes[0, 1])
+        
         # Path segments
         R_P = []
         # Path segment initial states, end states, and boundary functions
         x0 = []
         x_end = []
+        # TODO: Dictionary or lists to store boundary functions???
         z_u = []
         z_l = []
         z = {'z_u': [], 'z_l': []}
         # Trajectories for each path segment
         trajectories = []
+        # Compute the trajectory for each path segment
         for i in range(0, len(switched_path)):
-            # Compute the initial state for each path segment, starting at rest (x2=0)
+            # Compute the initial state for each path segment, starting at minimum velocity
             x0.append([switched_path[i][0], 0])
             # Compute the end state for each path segment, at rest (x2=0)
             x_end.append([switched_path[i][1], 0])
@@ -362,11 +457,11 @@ if __name__ == "__main__":
             # Compute the path segment reach-avoid set
             # Create boundary functions for the path segment's reach-avoid set
             if switched_path[i][2] == "A":
-                R_P.append(reachAvoidSetA.compute(X_T[i]))
+                R_P.append(reachAvoidSetA.compute(X_T["End"][i]))
                 z_u.append(simA.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_A)[0])
                 z_l.append(simA.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_A)[0])
             elif switched_path[i][2] == "B":
-                R_P.append(reachAvoidSetB.compute(X_T[i]))
+                R_P.append(reachAvoidSetB.compute(X_T["End"][i]))
                 z_u.append(simB.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_B)[0])
                 z_l.append(simB.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_B)[0])
             else:
@@ -387,18 +482,14 @@ if __name__ == "__main__":
             else:
                 raise ValueError(f"Invalid path segment {i+1} path type: {switched_path[i][2]}")
             print(f"Trajectory {i+1} completed.")
-        
-        # Plot all path-switching trajectories on 1 figure.
-        fig, axes = plt.subplots(3, 2)
-        # Reach Avoid Set A
-        reachAvoidSetA.plot(True, False, False, X_Ta, R_A, title= "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^A)$",ax=axes[0, 0])
-        # Reach Avoid Set B
-        reachAvoidSetB.plot(True, False, False, X_Tb, R_B, title="Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^B)$", ax=axes[0, 1])
-        # Path segments
-        reachAvoidSetA.plot(True, False, False, X_T[0], R_P[0], trajectories[0], "Trajectory for Path Segment 1", axes[1, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[1], R_P[1], trajectories[1], "Trajectory for Path Segment 2", axes[1, 1])
-        reachAvoidSetA.plot(True, False, False, X_T[2], R_P[2], trajectories[2], "Trajectory for Path Segment 3", axes[2, 0])
-        reachAvoidSetB.plot(True, False, False, X_T[3], R_P[3], trajectories[3], "Trajectory for Path Segment 4", axes[2, 1])
+            
+            # Plot the path segment
+            if switched_path[i][2] == "A":
+                reachAvoidSetA.plot(True, False, False, X_T["End"][i], R_P[i], trajectories[i], f"Trajectory for Path Segment {i+1}", axes[(i//2)+1, i%2])
+                # reachAvoidSetA.plot(True, False, False, X_T["End"][i], R_P[i], title=f"Trajectory for Path Segment {i+1}", ax=axes[(i//2)+1, i%2])
+            elif switched_path[i][2] == "B":
+                reachAvoidSetB.plot(True, False, False, X_T["End"][i], R_P[i], trajectories[i], f"Trajectory for Path Segment {i+1}", axes[(i//2)+1, i%2])
+                # reachAvoidSetB.plot(True, False, False, X_T["End"][i], R_P[i], title=f"Trajectory for Path Segment {i+1}", ax=axes[(i//2)+1, i%2])
         
         plt.tight_layout()
         plt.show()
