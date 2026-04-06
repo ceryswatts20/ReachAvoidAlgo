@@ -66,26 +66,23 @@ class ReachabilityCalculator:
         s, s_dot = x
 
         # Check if x is on the upper boundary (V^u)
-        if np.abs(s_dot - self.C_u(s)) < tolerance:
+        if self.is_on_upper_boundary(x, self.C_u, tolerance):
             m_u_val = self.m_u(s)
             # Dynamics with min acceleration L
             f_vec = self.f(x, 0)
             # S(x) = [-m_u, 1] . f(x, 0)
             return -m_u_val * f_vec[0] + 1 * f_vec[1]
-
         # Check if x is on the lower boundary (V^l)
-        elif np.abs(s_dot - self.C_l(s)) < tolerance:
+        elif self.is_on_lower_boundary(x, self.C_l, tolerance):
             m_l_val = self.m_l(s)
             # Dynamics with max acceleration U
             f_vec = self.f(x, 1)
             # S(x) = [m_l, -1] . f(x, 1)
             return m_l_val * f_vec[0] - 1 * f_vec[1]
-
         # If not on a known boundary, raise an error
         else:
             raise ValueError(
-                f"State x = [{s:.3f}, {s_dot:.3f}] is not on a known velocity "
-                f"boundary (C_u(s)={self.C_u(s):.3f}, C_l(s)={self.C_l(s):.3f})."
+                f"calculate_S: State x = [{s:.3f}, {s_dot:.3f}] is not on a known velocity boundary (C_u(s)={self.C_u(s):.3f}, C_l(s)={self.C_l(s):.3f})."
             )
     
     
@@ -241,23 +238,24 @@ class ReachabilityCalculator:
         return x1_condition and x2_condition
     
     """
-        Check if the state (x1, x2) lies on the upper boundary curve C_u(x1)
-        within a tolerance.
+        Check if the state (x1, x2) lies on the given upper boundary curve within a tolerance.
         
         Args:
             x (np.ndarray): The state [x1, x2].
+            boundary (Callable): The upper boundary function C_u(x1) or z_u(1).
             tol (float): Tolerance for checking equality.
             
         Returns:
-            bool: True if (x1, x2) is on C_u(x1), False otherwise.
+            bool: True if (x1, x2) is on boundary(x1), False otherwise.
     """
-    def is_on_upper_boundary(self, x: np.ndarray, tol: float = 1e-6) -> bool:
+    def is_on_upper_boundary(self, x: np.ndarray, boundary: Callable, tol: float = 1e-6) -> bool:
         x1, x2 = x
-        cu_val = float(self.C_u(x1))
+        
+        cu_val = float(boundary(x1))
         
         # If state is above the boundary, raise error
         if x2 > cu_val + tol:
-            raise ValueError(f"is_on_upper_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is above the upper boundary C_u(x1)={cu_val:.6f}.")
+            raise ValueError(f"is_on_upper_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is above the upper boundary boundary(x1)={cu_val:.6f}.")
         # If state is within tolerance below or at the boundary, return True
         elif x2 <= cu_val + tol and x2 >= cu_val - tol:
             return True
@@ -265,23 +263,23 @@ class ReachabilityCalculator:
             return False
         
     """
-        Check if the state (x1, x2) lies on the lower boundary curve C_l(x1)
-        within a tolerance.
+        Check if the state (x1, x2) lies on the given lower boundary curve within a tolerance.
         
         Args:
             x (np.ndarray): The state [x1, x2].
+            boundary (Callable): The lower boundary function C_l(x1) or z_l(1).
             tol (float): Tolerance for checking equality.
             
         Returns:
-            bool: True if (x1, x2) is on C_l(x1), False otherwise.
+            bool: True if (x1, x2) is on boundary(x1), False otherwise.
     """
-    def is_on_lower_boundary(self, x: np.ndarray, tol: float = 1e-6) -> bool:
+    def is_on_lower_boundary(self, x: np.ndarray, boundary: Callable, tol: float = 1e-6) -> bool:
         x1, x2 = x
-        cl_val = float(self.C_l(x1))
+        cl_val = float(boundary(x1))
         
         # If state is below the boundary, raise error
         if x2 < cl_val - tol:
-            raise ValueError(f"is_on_lower_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is below the lower boundary C_l(x1)={cl_val:.6f}.")
+            raise ValueError(f"is_on_lower_boundary: State (x1={x1:.6f}, x2={x2:.6f}) is below the lower boundary boundary(x1)={cl_val:.6f}.")
         # If state is within tolerance above or at the boundary, return True
         elif x2 >= cl_val - tol and x2 <= cl_val + tol:
             return True
@@ -439,11 +437,11 @@ class ReachabilityCalculator:
         Returns:
             set: 
     """
-    def extend(self, V: Callable, roots: list, x_end: float, x_start: float, u: int, e=25e-2, debug=True) -> set:
+    def extend(self, V: Callable, boundary: str, partition: tuple[list], x_end: float, x_start: float, u: int, e=25e-2, debug=False) -> set:
         # Line 1: Inputs not defined in the method signature
-        # Generate partition
-        I_in, I_out, I = self.generate_partition_I(roots, V)
-        # Initialise delta
+        I_in, I_out, I = partition
+        if debug:
+            print(f"Intervals in partition I: {I}")
         delta = (-1)**(u+1) * e
         
         # Line 3: Initialise Z and y
@@ -459,6 +457,7 @@ class ReachabilityCalculator:
         # Find intervals x_start and x_end are in
         I_start = I_end = i = 0
         for interval in I:
+            print(f"interval: {interval}")
             # If x_start is in interval save interval position in I
             if x_start[0] >= interval[1] and x_start[0] <= interval[0]:
                 I_start = i
@@ -495,10 +494,10 @@ class ReachabilityCalculator:
                 if interval in I_in:
                     if debug:
                         print("5: In I_in")
-                    # Line 6: If y is on the upper or lower boundary
-                    if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
+                    # Line 6: If y is on the boundary
+                    if (boundary == "upper" and self.is_on_upper_boundary(y, V)) or (boundary == "lower" and self.is_on_lower_boundary(y, V)):
                         if debug:
-                            if self.is_on_upper_boundary(y):
+                            if self.is_on_upper_boundary(y, V):
                                 print("6: y on upper boundary")
                             else:
                                 print("6: y on lower boundary")
@@ -522,8 +521,7 @@ class ReachabilityCalculator:
                     else:
                         if debug:
                             print("y not on boundary")
-                        # Integrate backwards in time from y with control u
-                        # until crossing a boundary (Cu/Cl) or reaching the interval end
+                        # Integrate backwards in time from y with control u until crossing a boundary (Cu/Cl) or reaching the interval end
                         T_b = self.integrate(y, u, events=interval[1], direction='backward')
                         
                         # If no trajectory points found, raise error
@@ -545,7 +543,7 @@ class ReachabilityCalculator:
                         # For each state in the trajectory T_I
                         for state in T_I:
                             # If state is on the boundary
-                            if self.is_on_upper_boundary(state) or self.is_on_lower_boundary(state):
+                            if (boundary == "upper" and self.is_on_upper_boundary(state, V)) or (boundary == "lower" and self.is_on_lower_boundary(state, V)):
                                 # If intersection_pts is empty
                                 if intersection_pts.size == 0:
                                     # Initialise array
@@ -603,9 +601,9 @@ class ReachabilityCalculator:
                     if debug:
                         print("17: In I_out")
                     # Line 18: If y is on the upper or lower boundary
-                    if self.is_on_upper_boundary(y) or self.is_on_lower_boundary(y):
+                    if (boundary == "upper" and self.is_on_upper_boundary(y, V)) or (boundary == "lower" and self.is_on_lower_boundary(y, V)):
                         if debug:
-                            if self.is_on_upper_boundary(y):
+                            if self.is_on_upper_boundary(y, V):
                                 print("18: y on upper boundary")
                             else:
                                 print("18: y on lower boundary")

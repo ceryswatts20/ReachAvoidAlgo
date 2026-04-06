@@ -2,8 +2,6 @@ from typing import Callable, Dict
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.integrate import solve_ivp
-from scipy.interpolate import interp1d
 
 from ManipulatorDynamics import ManipulatorDynamics
 from Simulator import Simulator
@@ -17,7 +15,7 @@ class ReachAvoidSet:
     given a parameters file and a target set X_T.
     """
 
-    def __init__(self, params_file: str, q_start: np.ndarray, q_end: np.ndarray, debug: bool = False):
+    def __init__(self, params_file: str, q_start: np.ndarray, q_end: np.ndarray, reachAvoidSet = None, debug: bool = False):
         """
         Initialises the class by loading the system parameters and initilising the dynamics, simulator and reachability classes.
 
@@ -26,65 +24,80 @@ class ReachAvoidSet:
         """
 
         # Initialise variables to store results
-        self._X_T = None
-        self._Z_u = None
-        self._Z_l = None
         self._T_star_u_arr = None
         self._T_star_l_arr = None
         self._x_d = None
         self._x_a = None
-        self._debug = debug
-        (
-            self._robot_type,
-            self._m,
-            self._L,
-            _,
-            _,
-            self._min_tau,
-            self._max_tau,
-        ) = HelperFunctions.load_parameters_from_file(params_file)
-        # Convert degrees to radians for joint angles
-        self._q_start = np.deg2rad(q_start)
-        self._q_end = np.deg2rad(q_end)
         
-        if self._debug:
-            print("\n--- Loaded Parameters ---")
-            print("Robot Type:", self._robot_type)
-            print("Masses (m):", self._m)
-            print("Lengths (L):", self._L)
-            print("Path Start (q_start_rad):", self._q_start)
-            print("Path End (q_end_rad):", self._q_end)
-            print("Min Torques (min_tau):", self._min_tau)
-            print("Max Torques (max_tau):", self._max_tau)
+        self._debug = debug
+        
+        # If a reachAvoidSet instance is provided, use it to initialise the class to save computation. This is useful for computing reach-avoid sets for different target sets without having to recompute the boundaries and dynamics.
+        if reachAvoidSet is not None:
+            if self._debug:
+                print("Initializing ReachAvoidSet with provided reachAvoidSet instance.")
+            # Copy parameters from the provided reachAvoidSet instance
+            self.lipschitz_const = reachAvoidSet.lipschitz_const
+            # Robot Dynamics
+            self._robot_dynamics = reachAvoidSet._robot_dynamics
+            # Simulator
+            self.simulator = reachAvoidSet.simulator
+            # Reachability Calculator
+            self.reach_calc = reachAvoidSet.reach_calc
+            # Velocity Limit Curves
+            self._C_u = self.reach_calc.C_u
+            self._C_l = self.reach_calc.C_l
+        else:
+            (
+                robot_type,
+                m,
+                L,
+                _,
+                _,
+                min_tau,
+                max_tau,
+            ) = HelperFunctions.load_parameters_from_file(params_file)
+            # Convert degrees to radians for joint angles
+            q_start_rad = np.deg2rad(q_start)
+            q_end_rad = np.deg2rad(q_end)
+            
+            if self._debug:
+                print("\n--- Loaded Parameters ---")
+                print("Robot Type:", robot_type)
+                print("Masses (m):", m)
+                print("Lengths (L):", L)
+                print("Path Start (q_start_rad):", q_start_rad)
+                print("Path End (q_end_rad):", q_end_rad)
+                print("Min Torques (min_tau):", min_tau)
+                print("Max Torques (max_tau):", max_tau)
 
-        # Check Lipschitz continuity
-        # The path equation
-        q_s_dot_path = self._q_end - self._q_start
-        q_s = lambda s: self._q_start + s * q_s_dot_path
-        # Check Lipschitz continuity of the path
-        lipschitz = HelperFunctions.is_lipschitz_continuous(q_s)
-        # If the path is not Lipschitz continuous, raise an error as the algorithm relies on this property
-        if not lipschitz[0]:
-            raise ValueError("Path is not Lipschitz continuous.")
-        # Store the Lipschitz constant for later use in boundary adjustments
-        self.lipschitz_const = lipschitz[1]
+            # Check Lipschitz continuity
+            # The path equation
+            q_s_dot_path = q_end_rad - q_start_rad
+            q_s = lambda s: q_start_rad + s * q_s_dot_path
+            # Check Lipschitz continuity of the path
+            lipschitz = HelperFunctions.is_lipschitz_continuous(q_s)
+            # If the path is not Lipschitz continuous, raise an error as the algorithm relies on this property
+            if not lipschitz[0]:
+                raise ValueError("Path is not Lipschitz continuous.")
+            # Store the Lipschitz constant for later use in boundary adjustments
+            self.lipschitz_const = lipschitz[1]
 
-        # Robot Dynamics and Simulator
-        self._robot_dynamics = ManipulatorDynamics(self._m, self._L, self._q_start, self._q_end, self._robot_type)
-        self.simulator = Simulator(self._min_tau, self._max_tau, self._robot_dynamics, self._debug)
+            # Robot Dynamics and Simulator
+            self._robot_dynamics = ManipulatorDynamics(m, L, q_start_rad, q_end_rad, robot_type)
+            self.simulator = Simulator(min_tau, max_tau, self._robot_dynamics, self._debug)
 
-        # Compute the VLC, V_u and V_l and the boundary functions C_u(x1) and C_l(x1)
-        self._x1_star = np.linspace(0, 1, 101)
-        self._setup_boundaries()
+            # Compute the VLC, V_u and V_l and the boundary functions C_u(x1) and C_l(x1)
+            self._x1_star = np.linspace(0, 1, 101)
+            self._setup_boundaries()
 
-        # Reachability calculator
-        self.reach_calc = ReachabilityCalculator(
-            self._C_u,
-            self._C_l,
-            self.simulator,
-            self._C_u_coeffs,
-            self._C_l_coeffs,
-        )
+            # Reachability calculator
+            self.reach_calc = ReachabilityCalculator(
+                self._C_u,
+                self._C_l,
+                self.simulator,
+                self._C_u_coeffs,
+                self._C_l_coeffs,
+            )
 
     def _setup_boundaries(self, poly_degree: int = 10):
         """
@@ -110,7 +123,7 @@ class ReachAvoidSet:
         if self._debug:
             print(f"Lipschitz constant: {self.lipschitz_const:.4f}")
 
-    def compute(self, X_T: list) -> Dict[str, tuple]:
+    def compute(self, X_T: list, boundaries: list[Callable] = None) -> Dict[str, tuple]:
         """
         Computes the reach-avoid set for a given target set i.e R(X_T).
 
@@ -120,8 +133,23 @@ class ReachAvoidSet:
         Returns:
             Dictionary[str, tuple]: The reach-avoid set R(X_T) as a
         """
+        # Initialise the reachability calculator
+        reach_calc = self.reach_calc
+        # If boundaries are provided (i.e the reach-avoid set boundaries of a path) use them instead of the VLC boundaries.
+        # This allows us to reuse the boundaries if they overlap with the new reach-avoid set's boundaries. GitHub issue #14
+        if boundaries is not None:
+            C_u, C_l = boundaries
+            lower_roots = upper_roots = [0, 1]
+            # Partition is all I_in like C_l
+            I_lower = I_upper = ([[1, 0]], [], [[1, 0]])
+        else:
+            C_u = self._C_u
+            C_l = self._C_l
+            # Find roots of S(x)
+            lower_roots, upper_roots, _ = reach_calc.find_S_roots(self._x1_star)
+            I_lower = reach_calc.generate_partition_I(lower_roots, C_l)
+            I_upper = reach_calc.generate_partition_I(upper_roots, C_u)
         
-        self._X_T = X_T
         _, x2_min, x2_max = X_T
         # Initial conditions - top of the target set
         x0_u = np.array([X_T[0], x2_max])
@@ -129,8 +157,9 @@ class ReachAvoidSet:
         x0_l = np.array([X_T[0], x2_min])
 
         # Backward trajectories from top and bottom of target set. Array of (x1, x2) pairs.
-        T_star_u_arr = self.reach_calc.integrate(x0_u, u=0, events=0.0, direction="backward")
-        T_star_l_arr = self.reach_calc.integrate(x0_l, u=1, events=0.0, direction="backward")
+        events = [0, C_u, C_l]
+        T_star_u_arr = self.reach_calc.integrate(x0_u, u=0, events=events, direction="backward")
+        T_star_l_arr = self.reach_calc.integrate(x0_l, u=1, events=events, direction="backward")
         # Store the backward trajectories for later use in plotting
         self._T_star_u_arr = T_star_u_arr
         self._T_star_l_arr = T_star_l_arr
@@ -144,8 +173,14 @@ class ReachAvoidSet:
         self._x_d = x_d
         self._x_a = x_a
         
+        if self._debug:
+            print(f"x0_l: {x0_l} \t x0_u: {x0_u}")
+            print(f"x_a: {tuple(map(float, x_a))} \t x_d: {tuple(map(float, x_d))}")
+            print(f"upper_roots: {upper_roots} \t lower_roots: {lower_roots}")
+            print(f"I_lower: {I_lower} \n I_upper: {I_upper}")
+        
         if False:
-            print(f"Target set X_T: {self._X_T}")
+            print(f"Target set X_T: {X_T}")
             print(f"x_d: {x_d[0]:.6f}, {x_d[1]:.6f}")
             print(f"x_a: {x_a[0]:.6f}, {x_a[1]:.6f}")
             
@@ -171,39 +206,29 @@ class ReachAvoidSet:
             ax.legend()
             plt.tight_layout()
             plt.show()
-            
-        # Initialise the reachability calculator
-        reach_calc = self.reach_calc
-        # Find roots of S(x)
-        lower_roots, upper_roots, _ = reach_calc.find_S_roots(self._x1_star)
         
-        if self._debug:
-            print(f"x0_l: {x0_l} \t x0_u: {x0_u}")
-            print(f"x_a: {tuple(map(float, x_a))} \t x_d: {tuple(map(float, x_d))}")
-            print(f"upper_roots: {upper_roots} \t lower_roots: {lower_roots}")
-            
         # Initialise sets Z_u and Z_l
         Z_u = set()
         Z_l = set()
         # Check which boundaries x_a and x_d are on to determine how to construct Z_u and Z_l
-        on_lower_a = reach_calc.is_on_lower_boundary(x_a)
-        on_lower_d = reach_calc.is_on_lower_boundary(x_d)
-        on_upper_a = reach_calc.is_on_upper_boundary(x_a)
-        on_upper_d = reach_calc.is_on_upper_boundary(x_d)
+        on_lower_a = reach_calc.is_on_lower_boundary(x_a, C_l)
+        on_lower_d = reach_calc.is_on_lower_boundary(x_d, C_l)
+        on_upper_a = reach_calc.is_on_upper_boundary(x_a, C_u)
+        on_upper_d = reach_calc.is_on_upper_boundary(x_d, C_u)
 
         # If x_a and x_d is on the lower boundary
         if on_lower_a and on_lower_d:
             if self._debug:
                 print("Both x_a and x_d are on the lower boundary.")
             # Z_l = T_star_l and extended trajectory
-            Z_l = T_star_l.union(reach_calc.extend(self._C_l, lower_roots, x_d, x_a, u=1, debug=self._debug))
+            Z_l = T_star_l.union(reach_calc.extend(C_l, "lower", I_lower, x_d, x_a, u=1, debug=self._debug))
             Z_u = T_star_u
         # If x_a and x_d are on the upper boundary
         elif on_upper_a and on_upper_d:
             if self._debug:
                 print("Both x_a and x_d are on the upper boundary.")
             # Z_u = T_star_u and extended trajectory
-            Z_u = T_star_u.union(reach_calc.extend(self._C_u, upper_roots, x_d, x_a, u=0, debug=self._debug))
+            Z_u = T_star_u.union(reach_calc.extend(C_u, "upper", I_upper, x_d, x_a, u=0, debug=self._debug))
             Z_l = T_star_l
         else:
             if self._debug:
@@ -214,7 +239,7 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_a is on the lower boundary.")
                 # Z_l = T_star_l and extended trajectory
-                Z_l = T_star_l.union(reach_calc.extend(self._C_l, lower_roots, [0, 0], x_a, u=1, debug=self._debug))
+                Z_l = T_star_l.union(reach_calc.extend(C_l, "lower", I_lower, [0, 0], x_a, u=1, debug=self._debug))
             else:
                 if self._debug:
                     print("x_a is not on the lower boundary.")
@@ -225,15 +250,11 @@ class ReachAvoidSet:
                 if self._debug:
                     print("x_d is on the upper boundary.")
                 # Z_u = T_star_u and extended trajectory
-                Z_u = T_star_u.union(reach_calc.extend(self._C_u, upper_roots, [0, 0], x_d, u=0, debug=self._debug))
+                Z_u = T_star_u.union(reach_calc.extend(C_u, "upper", I_upper, [0, 0], x_d, u=0, debug=self._debug))
             else:
                 if self._debug:
                     print("x_d is not on the upper boundary.")
                 Z_u = T_star_u
-
-        # Save the computed sets for later use in plotting
-        self._Z_u = Z_u
-        self._Z_l = Z_l
 
         # Return the reach-avoid set
         return {
@@ -291,9 +312,6 @@ class ReachAvoidSet:
             standalone = True
         else:
             standalone = False
-        
-        # if show_reach_avoid and (self._Z_l is None or self._Z_u is None):
-        #     raise RuntimeError("To plot the reach-avoid set and/or the target set, call compute() before plot().")
 
         x1_fine = np.linspace(0, 1, 5000)
 

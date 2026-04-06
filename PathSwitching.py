@@ -324,7 +324,7 @@ if __name__ == "__main__":
         print("Switching points on paths A and B:")
         for sp in switching_points:
             print(f"{sp['point']}: A: {sp['A']}, B: {sp['B']}")
-        
+            
         ################################################################
         ### Check points geometrically intersect in the joint space. ###
         ################################################################
@@ -345,23 +345,36 @@ if __name__ == "__main__":
                 point_on_B = qBs(sp["B"])
                 if pathsIntersect(qAs, qBs, point_on_B):
                     print(f"Paths qA and qB intersect at {sp['point']} on path B.")
-                    
-        # Define path segments
-        # P1: start -> p1 on A
-        P1 = [switching_points[0]["A"], switching_points[1]["A"], "A"]
+        
+        # Define path segments dynamically based on starting path
+        # If START is on A -> segment order should be A, B, A, B
+        # If START is on B -> segment order should be B, A, B, A
+        # P1: START -> p1 on A
         # P2: p1 -> p2 on B
-        P2 = [switching_points[1]["B"], switching_points[2]["B"], "B"]
         # P3: p2 -> p3 on A
-        P3 = [switching_points[2]["A"], switching_points[3]["A"], "A"]
         # P4: p3 -> end on B
-        P4 = [switching_points[3]["B"], switching_points[4]["B"], "B"]
-        # Switched path - tuple of lists
-        switched_path = [P1, P2, P3, P4]
-        print(f"switched path: {switched_path}")
+        # Determine if START is on path A or B
+        start_path = "A" if switching_points[0]["A"] is not None else "B"
+        # Build switched path by alternating between A and B at each switching point
+        switched_path = []
+        for i in range(len(switching_points) - 1):
+            # Offset alternation to respect the starting path
+            offset = 0 if start_path == "A" else 1
+            # Use path A if (i + offset) is even, otherwise use path B
+            # This alternates between paths, starting with start_path
+            current_path = "A" if (i + offset) % 2 == 0 else "B"
 
+            # Get the x1 coordinates for segment endpoints on current path.
+            start = switching_points[i][current_path]
+            end = switching_points[i+1][current_path]
+            
+            switched_path.append([start, end, current_path])
+        
+        print(f"switched path: {switched_path}")
+        
         # Calculate the reach-avoid set for given paths - used to create path segment target sets
-        reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end)
-        reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end)
+        reachAvoidSetA = ReachAvoidSet("parameters.txt", qA_start, qA_end, debug=True)
+        reachAvoidSetB = ReachAvoidSet("parameters.txt", qB_start, qB_end, debug=True)
         reachAvoidSetC = ReachAvoidSet("parameters.txt", qCs(0), qCs(1))
         lipschitz_A = reachAvoidSetA.lipschitz_const
         lipschitz_B = reachAvoidSetB.lipschitz_const
@@ -431,7 +444,7 @@ if __name__ == "__main__":
         fig, axes = plt.subplots(3, 2)
         # Reach Avoid Set A
         reachAvoidSetA.plot(True, False, False, X_Ta, R_A, title= "Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^A)$",ax=axes[0, 0])
-        # Reach Avoid Set B
+        # # Reach Avoid Set B
         reachAvoidSetB.plot(True, False, False, X_Tb, R_B, title="Reach-Avoid Set $\\mathcal{R}(\\mathcal{X}_T^B)$", ax=axes[0, 1])
         
         # Path segments
@@ -446,7 +459,7 @@ if __name__ == "__main__":
         # Trajectories for each path segment
         trajectories = []
         # Compute the trajectory for each path segment
-        for i in range(0, len(switched_path)):
+        for i in range(len(switched_path)):
             # Compute the initial state for each path segment, starting at minimum velocity
             x0.append([switched_path[i][0], 0])
             # Compute the end state for each path segment, at rest (x2=0)
@@ -457,11 +470,13 @@ if __name__ == "__main__":
             # Compute the path segment reach-avoid set
             # Create boundary functions for the path segment's reach-avoid set
             if switched_path[i][2] == "A":
-                R_P.append(reachAvoidSetA.compute(X_T["End"][i]))
+                print(f"Computing trajectory for path segment {i+1} on path A...")
+                R_P.append(reachAvoidSetA.compute(X_T["End"][i], [z_u_A, z_l_A]))
                 z_u.append(simA.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_A)[0])
                 z_l.append(simA.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_A)[0])
             elif switched_path[i][2] == "B":
-                R_P.append(reachAvoidSetB.compute(X_T["End"][i]))
+                print(f"Computing trajectory for path segment {i+1} on path B...")
+                R_P.append(reachAvoidSetB.compute(X_T["End"][i], z_B))
                 z_u.append(simB.create_boundary_function(R_P[i]['Z_u'], True, lipschitz_B)[0])
                 z_l.append(simB.create_boundary_function(R_P[i]['Z_l'], False, lipschitz_B)[0])
             else:
